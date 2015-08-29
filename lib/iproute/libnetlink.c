@@ -340,7 +340,7 @@ int rtnl_talk(struct rtnl_handle *rtnl, struct nlmsghdr *n, pid_t peer,
             fprintf(stderr, "sender address length == %d\n", msg.msg_namelen);
             exit(1);
         }
-        for (h = (struct nlmsghdr*)buf; status >= sizeof(*h); ) {
+        for (h = (struct nlmsghdr*)buf; status >= (int)sizeof(*h); ) { // changed
             int err;
             int len = h->nlmsg_len;
             int l = len - sizeof(*h);
@@ -354,7 +354,7 @@ int rtnl_talk(struct rtnl_handle *rtnl, struct nlmsghdr *n, pid_t peer,
                 exit(1);
             }
 
-            if (nladdr.nl_pid != peer ||
+            if ((pid_t)nladdr.nl_pid != peer || // changed
                 h->nlmsg_pid != rtnl->local.nl_pid ||
                 h->nlmsg_seq != seq) {
                 if (junk) {
@@ -370,7 +370,7 @@ int rtnl_talk(struct rtnl_handle *rtnl, struct nlmsghdr *n, pid_t peer,
 
             if (h->nlmsg_type == NLMSG_ERROR) {
                 struct nlmsgerr *err = (struct nlmsgerr*)NLMSG_DATA(h);
-                if (l < sizeof(struct nlmsgerr)) {
+                if (l < (int)sizeof(struct nlmsgerr)) { // changed
                     fprintf(stderr, "ERROR truncated\n");
                 } else {
                     errno = -err->error;
@@ -447,7 +447,7 @@ int rtnl_listen(struct rtnl_handle *rtnl,
             fprintf(stderr, "Sender address length == %d\n", msg.msg_namelen);
             exit(1);
         }
-        for (h = (struct nlmsghdr*)buf; status >= sizeof(*h); ) {
+        for (h = (struct nlmsghdr*)buf; status >= (int)sizeof(*h); ) { // changed
             int err;
             int len = h->nlmsg_len;
             int l = len - sizeof(*h);
@@ -510,7 +510,7 @@ int rtnl_from_file(FILE *rtnl, rtnl_filter_t handler,
         len = h->nlmsg_len;
         l = len - sizeof(*h);
 
-        if (l<0 || len>sizeof(buf)) {
+        if (l<0 || len>(int)sizeof(buf)) { // changed
             fprintf(stderr, "!!!malformed message: len=%d @%lu\n",
                 len, ftell(rtnl));
             return -1;
@@ -537,7 +537,7 @@ int addattr32(struct nlmsghdr *n, int maxlen, int type, __u32 data)
 {
     int len = RTA_LENGTH(4);
     struct rtattr *rta;
-    if (NLMSG_ALIGN(n->nlmsg_len) + len > maxlen) {
+    if ((int)NLMSG_ALIGN(n->nlmsg_len) + len > maxlen) { // changed
         fprintf(stderr,"addattr32: Error! max allowed bound %d exceeded\n",maxlen);
         return -1;
     }
@@ -555,7 +555,7 @@ int addattr_l(struct nlmsghdr *n, int maxlen, int type, const void *data,
     int len = RTA_LENGTH(alen);
     struct rtattr *rta;
 
-    if (NLMSG_ALIGN(n->nlmsg_len) + RTA_ALIGN(len) > maxlen) {
+    if ((int)NLMSG_ALIGN(n->nlmsg_len) + (int)RTA_ALIGN(len) > maxlen) { // changed
         fprintf(stderr, "addattr_l ERROR: message exceeded bound of %d\n",maxlen);
         return -1;
     }
@@ -569,7 +569,7 @@ int addattr_l(struct nlmsghdr *n, int maxlen, int type, const void *data,
 
 int addraw_l(struct nlmsghdr *n, int maxlen, const void *data, int len)
 {
-    if (NLMSG_ALIGN(n->nlmsg_len) + NLMSG_ALIGN(len) > maxlen) {
+    if ((int)NLMSG_ALIGN(n->nlmsg_len) + (int)NLMSG_ALIGN(len) > maxlen) { // changed
         fprintf(stderr, "addraw_l ERROR: message exceeded bound of %d\n",maxlen);
         return -1;
     }
@@ -679,7 +679,7 @@ int parse_rtattr_byindex(struct rtattr *tb[], int max, struct rtattr *rta, int l
 int __parse_rtattr_nested_compat(struct rtattr *tb[], int max, struct rtattr *rta,
                      int len)
 {
-    if (RTA_PAYLOAD(rta) < len)
+    if ((int)RTA_PAYLOAD(rta) < len) // changed
         return -1;
     if (RTA_PAYLOAD(rta) >= RTA_ALIGN(len) + sizeof(struct rtattr)) {
         rta = RTA_DATA(rta) + RTA_ALIGN(len);

@@ -2,10 +2,10 @@
 #include "interface.h"
 
 int main() {
-	// if (make_interface_file(".negi/negi.json") < 0) {
-	// 	fprintf(stderr, "Error: can't make interface file");
-	// }
+	if (make_interface_file(".negi/negi2.json") < 0) {
+		fprintf(stderr, "Error: can't make interface file");
+	}
 
-	read_interface_file(".negi/negi.json");
+	// read_interface_file(".negi/negi.json");
 	return 0;
 }
