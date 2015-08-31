@@ -456,117 +456,52 @@ int delete_virtual_interface(int max_index_num) {
 			}
 		}
 	}
-	printf("Delete all virtual interfaces\n");
+	printf("Deleted all virtual interfaces\n\n");
 	return 0;
 }
 
 int get_max_index() {
 	int max = 0;
-	int soc;
-	struct sockaddr_nl sa;
-	struct {
-		struct nlmsghdr nh;
-		struct rtgenmsg gen;
-	} request;
-	int seq = 100;
 
-	struct nlmsghdr *nlhdr;
+	struct rtnl_handle rth = { .fd = -1 };
 
-	struct sockaddr_nl kernel;
-	struct msghdr rtnl_msg;
-	struct iovec io;
-	memset(&rtnl_msg, 0, sizeof(rtnl_msg));
-	memset(&kernel, 0, sizeof(kernel));
-
-	// Make Request Message to Kernel
-	memset(&request, 0, sizeof(request));
-	kernel.nl_family = AF_NETLINK; /* fill-in kernel address (destination) */
-
-	// Make Netlink Socket
-	soc = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
-
-	// Preparing sockaddr_nl
-	memset(&sa, 0, sizeof(sa));
-	sa.nl_family = AF_NETLINK; // use netlink
-	sa.nl_pid = 0; // kernel
-	sa.nl_groups = 0; // unicast
-
-	request.nh.nlmsg_len = sizeof(request);
-	request.nh.nlmsg_type = RTM_GETLINK;
-	request.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
-	request.nh.nlmsg_pid = 0; // kernel
-	request.nh.nlmsg_seq = seq; // need to hack
-	request.gen.rtgen_family = AF_PACKET;
-
-	io.iov_base = &request;
-	io.iov_len = request.nh.nlmsg_len;
-	rtnl_msg.msg_iov = &io;
-	rtnl_msg.msg_iovlen = 1;
-	rtnl_msg.msg_name = &kernel;
-	rtnl_msg.msg_namelen = sizeof(kernel);
-
-	// Send Netlink Message to Kernel
-	sendmsg(soc, (struct msghdr *) &rtnl_msg, 0);
-
-	// Receive Message from Kernel
-	int end = 0;
-	char buf[IFLIST_REPLY_BUFFER];
-
-	while (!end) {
-		int len;
-		struct msghdr rtnl_reply;    /* generic msghdr structure */
-		struct iovec io_reply;
-
-		memset(&io_reply, 0, sizeof(io_reply));
-		memset(&rtnl_reply, 0, sizeof(rtnl_reply));
-
-		io.iov_base = buf;
-		io.iov_len = IFLIST_REPLY_BUFFER;
-		rtnl_reply.msg_iov = &io;
-		rtnl_reply.msg_iovlen = 1;
-		rtnl_reply.msg_name = &kernel;
-		rtnl_reply.msg_namelen = sizeof(kernel);
-
-    	len = recvmsg(soc, &rtnl_reply, 0); /* read lots of data */
-		if (len < 1) {
-			perror("recvmsg");
-			return -1;
-		}
-
-		// Analyze Netlink Message
-		for (nlhdr = (struct nlmsghdr *) buf; NLMSG_OK(nlhdr, len); nlhdr = NLMSG_NEXT(nlhdr, len)) {
-			switch (nlhdr->nlmsg_type) {
-				case 3:
-				end = 1;
-				break;
-				case 16:
-				end = 0;
-				struct ifinfomsg *ifimsg;
-				if (nlhdr->nlmsg_type != RTM_NEWLINK) {
-					printf("error: %d\n", nlhdr->nlmsg_type);
-					continue;
-				}
-
-				// Process Data of Netlink Message as ifinfomsg
-				ifimsg = NLMSG_DATA(nlhdr);
-				if (ifimsg->ifi_family != AF_UNSPEC && ifimsg->ifi_family != AF_INET6) {
-					printf("error family: %d\n", ifimsg->ifi_family);
-					continue;
-				}
-
-				// compare with max and interface index number
-				if (ifimsg->ifi_index > max) {
-					max = ifimsg->ifi_index;
-				}
-				break;
-
-				default:
-				printf("message type %d, length %d\n", nlhdr->nlmsg_type, nlhdr->nlmsg_len);
-				break;
-			}
-		}
+	if (rtnl_open(&rth, 0) < 0) {
+		exit(1);
 	}
-	close(soc);
+
+	int preferred_family = AF_UNSPEC;
+
+	if (rtnl_wilddump_request(&rth, preferred_family, RTM_GETLINK) < 0) {
+		perror("Cannot send dump request");
+		exit(1);
+	}
+
+	struct nlmsg_list *linfo = NULL;
+
+	if (rtnl_dump_filter(&rth, store_nlmsg, &linfo, NULL, NULL) < 0) {
+		fprintf(stderr, "Dump terminated\n");
+		exit(1);
+	}
+
+	struct nlmsg_list *l, *n;
+
+	for (l = linfo; l; l = n) {
+		n = l->next;
+		struct nlmsghdr *nlhdr = &(l->h);
+		struct ifinfomsg *ifimsg = NLMSG_DATA(nlhdr);
+
+		// Process Data of Netlink Message as ifinfomsg
+		if (ifimsg->ifi_family != AF_UNSPEC && ifimsg->ifi_family != AF_INET6) {
+			printf("error family: %d\n", ifimsg->ifi_family);
+			continue;
+		}
+
+		if (ifimsg->ifi_index > max) {
+			max = ifimsg->ifi_index;
+		}
+
+	}
+	rtnl_close(&rth);
 
 	return max;
 }
@@ -686,6 +621,37 @@ int interface_real_or_virtual(json_t *ifinfomsg_json) {
 	return -1;	
 }
 
+int down_interface(int index) {
+
+	struct iplink_req {
+		struct nlmsghdr     n;
+		struct ifinfomsg    i;
+		char            buf[1024];
+	};
+
+	struct rtnl_handle rth = { .fd = -1 };
+
+	if (rtnl_open(&rth, 0) < 0) {
+		exit(1);
+	}
+
+	struct iplink_req req;
+
+	memset(&req, 0, sizeof(req));
+	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+	req.i.ifi_family = AF_UNSPEC;
+	req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_EXCL;
+	req.n.nlmsg_type = RTM_SETLINK;
+	req.i.ifi_index = index;
+	req.i.ifi_change |= IFF_UP;
+	req.i.ifi_flags &= ~IFF_UP;
+
+	if (rtnl_talk(&rth, &req.n, 0, 0, NULL, NULL, NULL) < 0) {
+		exit(2);
+	}
+	fprintf(stderr, "Down interface %d\n", index);
+	return 0;
+}
 
 int read_interface_file(char* filename) {
 	json_error_t error;
@@ -697,7 +663,7 @@ int read_interface_file(char* filename) {
 	}
 
 	// delete virtual interfaces before remake
-	// delete_virtual_interface(get_max_index());
+	delete_virtual_interface(get_max_index());
 
 	json_t *IFLA_json = json_object_get(interface_json, "IFLA");
 	int i;
@@ -711,30 +677,28 @@ int read_interface_file(char* filename) {
 		// printf("%s\n", json_data);
 		// free(json_data);
 
-		int soc;
-		struct sockaddr_nl sa;
-		char buf[4096];
-		int n;
-		int seq = 100;
-		struct nlmsghdr *nlhdr;
-		struct ifinfomsg *ifihdr;
-		struct rtattr *rta;
+		struct rtnl_handle rth = { .fd = -1 };
 
-		soc = socket(AF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE);
+		if (rtnl_open(&rth, 0) < 0) {
+			exit(1);
+		}
 
-		memset(&sa, 0, sizeof(sa));
-		sa.nl_family = AF_NETLINK;
-		sa.nl_pid = 0; // kernel
-		sa.nl_groups = 0;
+		struct iplink_req {
+			struct nlmsghdr     n;
+			struct ifinfomsg    i;
+			char            buf[1024];
+		};
 
-		memset(buf, 0, sizeof(buf));
-		nlhdr = (struct nlmsghdr *)buf;
-		ifihdr = NLMSG_DATA(nlhdr);
-		nlhdr->nlmsg_pid = 0;
-		seq++;
-		nlhdr->nlmsg_seq = seq;
+		struct iplink_req req;
 
-		ifihdr->ifi_family = AF_UNSPEC;
+		memset(&req, 0, sizeof(req));
+		req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+		req.i.ifi_family = AF_UNSPEC;
+		req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL;
+		req.i.ifi_index = (int)json_number_value(json_object_get(ifinfomsg_json, "index"));
+		req.i.ifi_change =  0xFFFFFFFF;
+		req.i.ifi_type = 0;
+		req.i.ifi_flags = (unsigned int)json_number_value(json_object_get(ifinfomsg_json, "flags"));
 
 		// interface_index = virtual or real
 		int real_or_virtual = interface_real_or_virtual(ifinfomsg_json);
@@ -745,105 +709,304 @@ int read_interface_file(char* filename) {
 		}
 
 		if (real_or_virtual == 1) { // real
-			// configuration
-
-			nlhdr->nlmsg_type = RTM_SETLINK; 
-			nlhdr->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
-			ifihdr->ifi_index = (int)json_number_value(json_object_get(ifinfomsg_json, "index")); // lo
-			ifihdr->ifi_change =  0xFFFFFFFF;
-			ifihdr->ifi_type = 0;
-			ifihdr->ifi_flags = (unsigned int)json_number_value(json_object_get(ifinfomsg_json, "flags"));
-
-			int interface_index = ifihdr->ifi_index;
-
-			nlhdr->nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
-
-			const char *key;
-			json_t *value;
-			json_object_foreach(rta_json, key, value) {
-
-				if (strcmp(key, "ifname") == 0) {
-					// IFNAME
-					rta = (void *)((char *)nlhdr + nlhdr->nlmsg_len);
-					rta->rta_type = IFLA_IFNAME;
-					sprintf((char *)RTA_DATA(rta), "%s", json_string_value(value));
-					rta->rta_len = RTA_LENGTH(sizeof(rta));
-
-					nlhdr->nlmsg_len += rta->rta_len;
-				}
-				else if (strcmp(key, "address") == 0) {
-					// ADDRESS
-					// rta = (void *)((char *)nlhdr + nlhdr->nlmsg_len);
-					// rta->rta_type = IFLA_ADDRESS;
-
-					// sprintf((unsigned char *)RTA_DATA(rta), "%s", json_string_value(value));
-					// rta->rta_len = RTA_LENGTH(sizeof(rta));
-
-					// nlhdr->nlmsg_len += rta->rta_len;
-				}
-				else if (strcmp(key, "broadcast") == 0) {
-					// BROADCAST
-					// rta = (void *)((char *)nlhdr + nlhdr->nlmsg_len);
-					// rta->rta_type = IFLA_BROADCAST;
-
-					// sprintf((unsigned char *)RTA_DATA(rta), "%s", json_string_value(value));
-					// rta->rta_len = RTA_LENGTH(sizeof(rta));
-
-					// nlhdr->nlmsg_len += rta->rta_len;					
-				}
-				else if (strcmp(key, "mtu") == 0) {
-					// MTU
-					rta = (void *)((char *)nlhdr + nlhdr->nlmsg_len);
-					rta->rta_type = IFLA_MTU;
-					*(int *)RTA_DATA(rta) = json_number_value(value);
-					rta->rta_len = RTA_LENGTH(sizeof(rta));
-
-					nlhdr->nlmsg_len += rta->rta_len;
-					
-				}
-				else if (strcmp(key, "rxpkt") == 0) {
-					// RX packets			
-				}
-				else if (strcmp(key, "txpkt") == 0) {
-					// TX packets
-				}
-				else {
-					continue;
-				}
-			};
-
-			// send attribute
-			n = sendto(soc, (void *)nlhdr, nlhdr->nlmsg_len, 0, (struct sockaddr *)&sa, sizeof(sa));
-			if (n < 0) {
-				perror("sendto");
-				return 1;
-			}
-
-			n = recv(soc, buf, sizeof(buf), 0);
-			if (n < 0) {
-				perror("recvmsg");
-				return 1;
-			}
-
-			// analyze responce
-			for (nlhdr = (struct nlmsghdr *)buf; NLMSG_OK(nlhdr, n); nlhdr = NLMSG_NEXT(nlhdr, n)) {
-				if (nlhdr->nlmsg_type == NLMSG_ERROR) {
-					struct nlmsgerr *errmsg;
-					errmsg = NLMSG_DATA(nlhdr);
-					if (errmsg->error == 0) {
-						fprintf(stdout, "Success: Set Interface %d attribute.\n", interface_index);
-					}
-					else {
-						printf("%d, %s\n", errmsg->error, strerror(-errmsg->error));
-					}
-				}
-			}
+			req.n.nlmsg_type = RTM_SETLINK;
 		}
 		else { // virtual
-			// 新規作成
+			req.n.nlmsg_type = RTM_NEWLINK;
+		}
+
+		char *interface_name = NULL;
+		const char *key;
+		json_t *value;
+		json_object_foreach(rta_json, key, value) {
+			// if (real_or_virtual == 1) { // for test あとで
+			// 	continue;
+			// }
+
+			if (strcmp(key, "IFNAME") == 0) {
+				interface_name = (char *)json_string_value(value);
+				addattr_l(&req.n, sizeof(req), IFLA_IFNAME, (char *)json_string_value(value), strlen(json_string_value(value))+1);
+			}
+
+			if (strcmp(key, "INFO_KIND") == 0) {
+				char *type = (char *)json_string_value(value);
+				struct rtattr *linkinfo;
+				linkinfo = addattr_nest(&req.n, sizeof(req), IFLA_LINKINFO);
+				addattr_l(&req.n, sizeof(req), IFLA_INFO_KIND, type, strlen(type));
+				addattr_nest_end(&req.n, linkinfo);
+			}
+
+			if (strcmp(key, "LINK") == 0) {
+				int link = (int)json_number_value(value); 
+				addattr_l(&req.n, sizeof(req), IFLA_MTU, &link, 4);
+			}
+
+			if (strcmp(key, "MTU") == 0) {
+				int mtu = (int)json_number_value(value);
+				addattr_l(&req.n, sizeof(req), IFLA_MTU, &mtu, 4);
+			}
+
+			if (strcmp(key, "QDISC") == 0) {
+				addattr_l(&req.n, sizeof(req), IFLA_QDISC, (char *)json_string_value(value), strlen(json_string_value(value))+1);
+			}
+
+			if (strcmp(key, "MASTER") == 0) {
+				int master = (int)json_number_value(value);
+				addattr_l(&req.n, sizeof(req), IFLA_MASTER, &master, 4);
+			}
+
+			static const char *oper_states[] = { // link state あとで
+				"UNKNOWN", "NOTPRESENT", "DOWN", "LOWERLAYERDOWN", 
+				"TESTING", "DORMANT",	 "UP"
+			};
+
+			if (strcmp(key, "OPERSTATE") == 0) {
+				char *operstate = (char *)json_string_value(value);
+				int i;
+				for (i = 0; i < (int)sizeof(oper_states); i++) {
+					if (strcmp(operstate, oper_states[i]) == 0) {
+						break;
+					}
+				}
+				switch (i) {
+					case 2: // DOWN
+					req.i.ifi_change |= IFF_UP;
+					req.i.ifi_flags &= ~IFF_UP;
+					break;
+					case 6: // UP
+					req.i.ifi_change |= IFF_UP;
+					req.i.ifi_flags |= IFF_UP;
+					break;
+					default:
+					break;
+				}
+			}
+
+			if (strcmp(key, "TXQLEN") == 0) {
+				int txqlen = (int)json_number_value(value);
+				addattr_l(&req.n, sizeof(req), IFLA_TXQLEN, &txqlen, 4);
+			}
+
+			if (strcmp(key, "ADDRESS") == 0) {
+				if (real_or_virtual == 1) {
+					continue;
+				}
+
+				char abuf[32];
+				char *arg = (char *)json_string_value(value);
+				int i;
+
+				for (i = 0; i < (int)sizeof(abuf); i++) {
+					int temp;
+					char *cp = strchr(arg, ':');
+					if (cp) {
+						*cp = 0;
+						cp++;
+					}
+					if (sscanf(arg, "%x", &temp) != 1) {
+						fprintf(stderr, "\"%s\" is invalid lladdr.\n", arg);
+						return -1;
+					}
+					if (temp < 0 || temp > 255) {
+						fprintf(stderr, "\"%s\" is invalid lladdr.\n", arg);
+						return -1;
+					}
+					abuf[i] = temp;
+					if (!cp)
+						break;
+					arg = cp;
+				}
+
+				addattr_l(&req.n, sizeof(req), IFLA_ADDRESS, abuf, i+1);
+			}
+
+			if (strcmp(key, "BROADCAST") == 0) {
+				if (real_or_virtual == 1) {
+					continue;
+				}
+				char abuf[32];
+				char *arg = (char *)json_string_value(value);
+				int i;
+
+				for (i = 0; i < (int)sizeof(abuf); i++) {
+					int temp;
+					char *cp = strchr(arg, ':');
+					if (cp) {
+						*cp = 0;
+						cp++;
+					}
+					if (sscanf(arg, "%x", &temp) != 1) {
+						fprintf(stderr, "\"%s\" is invalid lladdr.\n", arg);
+						return -1;
+					}
+					if (temp < 0 || temp > 255) {
+						fprintf(stderr, "\"%s\" is invalid lladdr.\n", arg);
+						return -1;
+					}
+					abuf[i] = temp;
+					if (!cp)
+						break;
+					arg = cp;
+				}
+
+				addattr_l(&req.n, sizeof(req), IFLA_BROADCAST, abuf, i+1);			
+			}
+
+			if (strcmp(key, "IFALIAS") == 0) {
+				addattr_l(&req.n, sizeof(req), IFLA_IFALIAS, (char *)json_string_value(value), strlen(json_string_value(value))+1);
+			}
+
+			// if (strcmp(key, "STATS64") == 0) { // あとで
+			// char * _SL_ = "\n";
+			// struct rtnl_link_stats64 slocal;
+			// struct rtnl_link_stats64 *s = RTA_DATA(tb[IFLA_STATS64]);
+			// if (((unsigned long)s) & (sizeof(unsigned long)-1)) {
+			// 	memcpy(&slocal, s, sizeof(slocal));
+			// 	s = &slocal;
+			// }
+			// fprintf(stdout, "%s", _SL_);
+			// fprintf(stderr, "    RX: bytes  packets  errors  dropped overrun mcast   %s%s",
+			// 	s->rx_compressed ? "compressed" : "", _SL_);
+			// fprintf(stderr, "    %-10llu %-8llu %-7llu %-7llu %-7llu %-7llu",
+			// 	(unsigned long long)s->rx_bytes,
+			// 	(unsigned long long)s->rx_packets,
+			// 	(unsigned long long)s->rx_errors,
+			// 	(unsigned long long)s->rx_dropped,
+			// 	(unsigned long long)s->rx_over_errors,
+			// 	(unsigned long long)s->multicast);
+			// if (s->rx_compressed)
+			// 	fprintf(stderr, " %-7llu",
+			// 		(unsigned long long)s->rx_compressed);
+			// if (1) {
+			// 	fprintf(stderr, "%s", _SL_);
+			// 	fprintf(stderr, "    RX errors: length  crc     frame   fifo    missed%s", _SL_);
+			// 	fprintf(stderr, "               %-7llu  %-7llu %-7llu %-7llu %-7llu",
+			// 		(unsigned long long)s->rx_length_errors,
+			// 		(unsigned long long)s->rx_crc_errors,
+			// 		(unsigned long long)s->rx_frame_errors,
+			// 		(unsigned long long)s->rx_fifo_errors,
+			// 		(unsigned long long)s->rx_missed_errors);
+			// }
+			// fprintf(stderr, "%s", _SL_);
+			// fprintf(stderr, "    TX: bytes  packets  errors  dropped carrier collsns %s%s",
+			// 	s->tx_compressed ? "compressed" : "", _SL_);
+			// fprintf(stderr, "    %-10llu %-8llu %-7llu %-7llu %-7llu %-7llu",
+			// 	(unsigned long long)s->tx_bytes,
+			// 	(unsigned long long)s->tx_packets,
+			// 	(unsigned long long)s->tx_errors,
+			// 	(unsigned long long)s->tx_dropped,
+			// 	(unsigned long long)s->tx_carrier_errors,
+			// 	(unsigned long long)s->collisions);
+			// if (s->tx_compressed)
+			// 	fprintf(stderr, " %-7llu",
+			// 		(unsigned long long)s->tx_compressed);
+			// if (1) {
+			// 	fprintf(stderr, "%s", _SL_);
+			// 	fprintf(stderr, "    TX errors: aborted fifo    window  heartbeat%s", _SL_);
+			// 	fprintf(stderr, "               %-7llu  %-7llu %-7llu %-7llu",
+			// 		(unsigned long long)s->tx_aborted_errors,
+			// 		(unsigned long long)s->tx_fifo_errors,
+			// 		(unsigned long long)s->tx_window_errors,
+			// 		(unsigned long long)s->tx_heartbeat_errors);
+			// }
+			// }
+			// if (!tb[IFLA_STATS64] && tb[IFLA_STATS]) { // あとで
+			// char * _SL_ = "\n";
+			// struct rtnl_link_stats slocal;
+			// struct rtnl_link_stats *s = RTA_DATA(tb[IFLA_STATS]);
+			// if (((unsigned long)s) & (sizeof(unsigned long)-1)) {
+			// 	memcpy(&slocal, s, sizeof(slocal));
+			// 	s = &slocal;
+			// }
+			// fprintf(stderr, "%s", _SL_);
+			// fprintf(stderr, "    RX: bytes  packets  errors  dropped overrun mcast   %s%s",
+			// 	s->rx_compressed ? "compressed" : "", _SL_);
+			// fprintf(stderr, "    %-10u %-8u %-7u %-7u %-7u %-7u",
+			// 	s->rx_bytes, s->rx_packets, s->rx_errors,
+			// 	s->rx_dropped, s->rx_over_errors,
+			// 	s->multicast
+			// 	);
+			// if (s->rx_compressed)
+			// 	fprintf(stderr, " %-7u", s->rx_compressed);
+			// if (1) {
+			// 	fprintf(stderr, "%s", _SL_);
+			// 	fprintf(stderr, "    RX errors: length  crc     frame   fifo    missed%s", _SL_);
+			// 	fprintf(stderr, "               %-7u  %-7u %-7u %-7u %-7u",
+			// 		s->rx_length_errors,
+			// 		s->rx_crc_errors,
+			// 		s->rx_frame_errors,
+			// 		s->rx_fifo_errors,
+			// 		s->rx_missed_errors
+			// 		);
+			// }
+			// fprintf(stderr, "%s", _SL_);
+			// fprintf(stderr, "    TX: bytes  packets  errors  dropped carrier collsns %s%s",
+			// 	s->tx_compressed ? "compressed" : "", _SL_);
+			// fprintf(stderr, "    %-10u %-8u %-7u %-7u %-7u %-7u",
+			// 	s->tx_bytes, s->tx_packets, s->tx_errors,
+			// 	s->tx_dropped, s->tx_carrier_errors, s->collisions);
+			// if (s->tx_compressed)
+			// 	fprintf(stderr, " %-7u", s->tx_compressed);
+			// if (1) {
+			// 	fprintf(stderr, "%s", _SL_);
+			// 	fprintf(stderr, "    TX errors: aborted fifo    window  heartbeat%s", _SL_);
+			// 	fprintf(stderr, "               %-7u  %-7u %-7u %-7u",
+			// 		s->tx_aborted_errors,
+			// 		s->tx_fifo_errors,
+			// 		s->tx_window_errors,
+			// 		s->tx_heartbeat_errors
+			// 		);
+			// }
+			// }
+
+			// if (IFLA_VFINFO_LIST] && tb[IFLA_NUM_VF]) { // あとで
+			// struct rtattr *i, *vflist = tb[IFLA_VFINFO_LIST];
+			// int rem = RTA_PAYLOAD(vflist);
+
+			// for (i = RTA_DATA(vflist); RTA_OK(i, rem); i = RTA_NEXT(i, rem)){
+			// 	struct rtattr *vfinfo = i;
+			// 	struct ifla_vf_mac *vf_mac;
+			// 	struct ifla_vf_vlan *vf_vlan;
+			// 	struct ifla_vf_tx_rate *vf_tx_rate;
+			// 	struct rtattr *vf[IFLA_VF_MAX+1];
+			// 	// SPRINT_BUF(b1);
+
+			// 	if (vfinfo->rta_type != IFLA_VF_INFO) {
+			// 		fprintf(stderr, "BUG: rta type is %d\n", vfinfo->rta_type);
+			// 		return;
+			// 	}
+
+			// 	parse_rtattr_nested(vf, IFLA_VF_MAX, vfinfo);
+
+			// 	vf_mac = RTA_DATA(vf[IFLA_VF_MAC]);
+			// 	vf_vlan = RTA_DATA(vf[IFLA_VF_VLAN]);
+			// 	vf_tx_rate = RTA_DATA(vf[IFLA_VF_TX_RATE]);
+
+			// 	// fprintf(stderr, "\n    vf %d MAC %s", vf_mac->vf, ll_addr_n2a((unsigned char *)&vf_mac->mac, ETH_ALEN, 0, b1, sizeof(b1)));
+			// 		if (vf_vlan->vlan)
+			// 			fprintf(stderr, ", vlan %d", vf_vlan->vlan);
+			// 		if (vf_vlan->qos)
+			// 			fprintf(stderr, ", qos %d", vf_vlan->qos);
+			// 		if (vf_tx_rate->rate)
+			// 			fprintf(stderr, ", tx rate %d (Mbps)", vf_tx_rate->rate);
+			// 	}
+			// }
+
 
 		}
+		if (real_or_virtual == 1) {
+			down_interface(req.i.ifi_index);
+		}
+		fprintf(stderr, "%d: interface \"%s\" message is ready.\n", req.i.ifi_index, interface_name);
+
+		if (rtnl_talk(&rth, &req.n, 0, 0, NULL, NULL, NULL) < 0) {
+			exit(2);
+		}
+
+		fprintf(stderr, "%d: interface \"%s\" was changed.\n\n", req.i.ifi_index, interface_name);
+
 	}
+	fprintf(stderr, "Success arranging all interfaces!\n\n");
 
 	return 0;
 }
