@@ -1,16 +1,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <linux/netlink.h>
-#include <linux/rtnetlink.h>
 #include <linux/if_arp.h>
-#include <linux/if_link.h>
+
 #include "lib/iproute/libnetlink.h"
 // #include <linux/netdevice.h> // for lt Linux 2.4
 #include <jansson.h>
+
+#include "common.h"
+#include "interface.h"
 
 #define IFLIST_REPLY_BUFFER 8096
 
@@ -18,29 +17,6 @@ struct iplink_req {
 	struct nlmsghdr n;
 	struct ifinfomsg i;
 	char buf[1024];
-};
-
-int make_file(char *filename, char *string) {
-	FILE *fp;
-
-	fp = fopen( filename, "w" );
-	if( fp == NULL ){
-		printf( "%s couldn't open\n", filename );
-		return -1;
-	}
-
-	fputs(string, fp);
-
-	fclose(fp);
-
-	printf( "made \"%s\"\n", filename );
-	return 0;
-}
-
-struct nlmsg_list
-{
-	struct nlmsg_list *next;
-	struct nlmsghdr	  h;
 };
 
 static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
