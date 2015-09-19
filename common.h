@@ -14,3 +14,7 @@ struct nlmsg_list
 };
 
 #endif
+
+#ifndef	INFINITY_LIFE_TIME
+#define     INFINITY_LIFE_TIME      0xFFFFFFFFU
+#endif
