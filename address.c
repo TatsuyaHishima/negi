@@ -1,15 +1,10 @@
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <linux/netlink.h>
-#include <linux/rtnetlink.h>
-#include <linux/if_arp.h>
-#include <linux/if_link.h>
+#include <arpa/inet.h>
+#include <net/if.h>
 #include "lib/iproute/libnetlink.h"
 #include <jansson.h>
+
 
 #include "common.h"
 #include "address.h"
@@ -20,7 +15,7 @@ static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n, void *
 	struct nlmsg_list *h;
 	struct nlmsg_list **lp;
 
-		h = malloc(n->nlmsg_len+sizeof(void*));
+	h = malloc(n->nlmsg_len+sizeof(void*));
 	if (h == NULL)
 		return -1;
 
@@ -29,8 +24,6 @@ static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n, void *
 
 	for (lp = linfo; *lp; lp = &(*lp)->next) /* NOTHING */;
 	*lp = h;
-
-
 
 	return 0;
 }
@@ -64,6 +57,7 @@ int make_address_file(char *filename) {
 		struct nlmsghdr *nlhdr = &(a->h);
 
 		// Print Netlink Message length and type
+		printf("\n===\n");
 		printf("len: %d\n", nlhdr->nlmsg_len);
 		printf("type: %d\n", nlhdr->nlmsg_type);
 
@@ -85,7 +79,112 @@ int make_address_file(char *filename) {
 		parse_rtattr(tb, IFA_MAX, IFA_RTA(ifamsg), len);
 
 
+		if (tb[IFA_LABEL]) {
+			printf("%s\n", (char *)RTA_DATA(tb[IFA_LABEL]));
+		}
+		else {
+			char name[8];
+			if_indextoname(ifamsg->ifa_index, name);
+			printf("%s\n", name);
+		}
 
+		if (tb[IFA_ADDRESS]) {
+			if (ifamsg->ifa_family == AF_INET) {
+				unsigned char *a = RTA_DATA(tb[IFA_ADDRESS]);
+				char buf[64];
+				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
+				printf("ADDRESS -> %d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+
+			}
+			else if (ifamsg->ifa_family == AF_INET6) {
+				unsigned char *a = RTA_DATA(tb[IFA_ADDRESS]);
+				char buf[64];
+				inet_ntop(AF_INET6, a, buf, sizeof(buf));
+				printf("ADDRESS -> %s\n", buf);
+			}
+		}
+		if (tb[IFA_LOCAL]) {
+			if (ifamsg->ifa_family == AF_INET) {
+				unsigned char *a = RTA_DATA(tb[IFA_LOCAL]);
+				char buf[64];
+				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
+				printf("LOCAL -> %d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+
+			}
+			else if (ifamsg->ifa_family == AF_INET6) {
+				unsigned char *a = RTA_DATA(tb[IFA_LOCAL]);
+				char buf[64];
+				inet_ntop(AF_INET6, a, buf, sizeof(buf));
+				printf("LOCAL -> %s\n", buf);
+			}
+		}
+		if (tb[IFA_BROADCAST]) {
+			if (ifamsg->ifa_family == AF_INET) {
+				unsigned char *a = RTA_DATA(tb[IFA_BROADCAST]);
+				char buf[64];
+				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
+				printf("BROADCAST ->%d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+
+			}
+			else if (ifamsg->ifa_family == AF_INET6) {
+				unsigned char *a = RTA_DATA(tb[IFA_BROADCAST]);
+				char buf[64];
+				inet_ntop(AF_INET6, a, buf, sizeof(buf));
+				printf("BROADCAST -> %s\n", buf);
+			}
+		}
+		if (tb[IFA_ANYCAST]) {
+			if (ifamsg->ifa_family == AF_INET) {
+				unsigned char *a = RTA_DATA(tb[IFA_ANYCAST]);
+				char buf[64];
+				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
+				printf("ANYCAST ->%d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+
+			}
+			else if (ifamsg->ifa_family == AF_INET6) {
+				unsigned char *a = RTA_DATA(tb[IFA_ANYCAST]);
+				char buf[64];
+				inet_ntop(AF_INET6, a, buf, sizeof(buf));
+				printf("ANYCAST -> %s\n", buf);
+			}
+		}
+		if (tb[IFA_CACHEINFO]) {
+			struct ifa_cacheinfo *ci = RTA_DATA(tb[IFA_CACHEINFO]);
+			fprintf(stderr, "valid_lft ");
+			if (ci->ifa_valid == INFINITY_LIFE_TIME)
+				fprintf(stderr, "forever");
+			else
+				fprintf(stderr, "%usec", ci->ifa_valid);
+			fprintf(stderr, " preferred_lft ");
+			if (ci->ifa_prefered == INFINITY_LIFE_TIME)
+				fprintf(stderr, "forever\n");
+			else {
+				if (ifamsg->ifa_flags&IFA_F_DEPRECATED)
+					fprintf(stderr, "%dsec\n", ci->ifa_prefered);
+				else
+					fprintf(stderr, "%usec\n", ci->ifa_prefered);
+			}
+
+		}
+		if (tb[IFA_MULTICAST]) {
+			if (ifamsg->ifa_family == AF_INET) {
+				unsigned char *a = RTA_DATA(tb[IFA_MULTICAST]);
+				char buf[64];
+				sprintf(buf, "%d:%d:%d:%d", a[0], a[1], a[2], a[3]);
+				printf("MULTICAST ->%d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+
+			}
+			else if (ifamsg->ifa_family == AF_INET6) {
+				unsigned char *a = RTA_DATA(tb[IFA_MULTICAST]);
+				char buf[64];
+				inet_ntop(AF_INET6, a, buf, sizeof(buf));
+				printf("MULTICAST -> %s\n", buf);
+			}
+
+		}
+		if (tb[IFA_FLAGS]) {
+			printf("FLAGS -> %d\n", *(int *)RTA_DATA(tb[IFA_FLAGS]));
+		}
 	}
 	free(a);
 
@@ -93,3 +192,4 @@ int make_address_file(char *filename) {
 
 	return 0;
 }
+
