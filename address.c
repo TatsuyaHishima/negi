@@ -182,9 +182,9 @@ int make_address_file(char *filename) {
 			}
 
 		}
-		if (tb[IFA_FLAGS]) {
-			printf("FLAGS -> %d\n", *(int *)RTA_DATA(tb[IFA_FLAGS]));
-		}
+		// if (tb[IFA_FLAGS]) {
+		// 	printf("FLAGS -> %d\n", *(int *)RTA_DATA(tb[IFA_FLAGS]));
+		// }
 	}
 	free(a);
 
