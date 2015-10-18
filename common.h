@@ -13,6 +13,15 @@ struct nlmsg_list
 	struct nlmsghdr	  h;
 };
 
+typedef struct
+{
+	__u8 family;
+	__u8 bytelen;
+	__s16 bitlen;
+	__u32 flags;
+	__u32 data[8];
+} inet_prefix;
+
 #endif
 
 #ifndef	INFINITY_LIFE_TIME

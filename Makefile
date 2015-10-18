@@ -6,7 +6,7 @@ CC=gcc
 LFLAG = -ljansson $(pkgconfig --cflags --libs libnl-3.0)
 OPTIONS = -W -Wall -O3
 NAME = negi
-OBJECT = main.c common.c interface.c address.c lib/iproute/libnetlink.c
+OBJECT = main.c common.c interface.c address.c route.c lib/iproute/libnetlink.c lib/libutil.a lib/libnetlink.a
 
 .PHONY: all,clean,re
 
