@@ -4,6 +4,7 @@
 
 #include "interface.h"
 #include "address.h"
+#include "route.h"
 #include "common.h"
 
 int main(int argc, char **argv) {
@@ -17,11 +18,14 @@ int main(int argc, char **argv) {
 
 	if (argc) {
 		if (strcmp("make", *argv) == 0) {
-			if (make_interface_file(".negi/negi4.json") < 0) {
-				fprintf(stderr, "Error: can't make interface file");
-			}
-			if (make_address_file(".negi/negi5.json") < 0) {
-				fprintf(stderr, "Error: can't make interface file");
+			// if (make_interface_file(".negi/negi4.json") < 0) {
+			// 	fprintf(stderr, "Error: can't make interface file");
+			// }
+			// if (make_address_file(".negi/negi5.json") < 0) {
+			// 	fprintf(stderr, "Error: can't make address file");
+			// }
+			if (make_route_file(".negi/negi5.json") < 0) {
+				fprintf(stderr, "Error: can't make route file");
 			}
 		}
 		else if (strcmp("read", *argv) == 0) {

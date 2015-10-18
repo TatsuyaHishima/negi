@@ -8,174 +8,196 @@
 #include <linux/rtnetlink.h>
 #include <net/if.h>
 
-int main() {
+// #include <utils.h>
 
-	int soc;
-	struct sockaddr_nl sa;
-	struct {
-		struct nlmsghdr nh;
-		struct rtmsg rtm;/* hack */
-	} request;
+#include <stdlib.h>
 
-	int seq = 100;
-	int n;
-	char buf[4096];
-	struct nlmsghdr *nlhdr;
+// #include "lib/iproute/libnetlink.h"
+#include "common.h"
+#include "route.h"
 
-	soc = socket(AF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE);
+static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
+{
+	struct nlmsg_list **linfo = (struct nlmsg_list**)arg;
+	struct nlmsg_list *h;
+	struct nlmsg_list **lp;
 
-	memset(&sa, 0, sizeof(sa));
-	sa.nl_family = AF_NETLINK;
- 	sa.nl_pid = 0; /* kernel */
-	sa.nl_groups = 0;
+	h = malloc(n->nlmsg_len+sizeof(void*));
+	if (h == NULL)
+		return -1;
 
-	request.nh.nlmsg_len = sizeof(request);
-	request.nh.nlmsg_type = RTM_GETROUTE;/* hack */
-	request.nh.nlmsg_flags = NLM_F_ROOT | NLM_F_REQUEST;
-	request.nh.nlmsg_pid = 0;
-	seq++;
-	request.nh.nlmsg_seq = seq;
-	request.rtm.rtm_family = AF_INET;
+	memcpy(&h->h, n, n->nlmsg_len);
+	h->next = NULL;
 
-	n = sendto(soc, (void *)&request, sizeof(request), 0, (struct sockaddr *)&sa, sizeof(sa));
-	if (n < 0) {
-		perror("sendto");
-		return 1;
+	for (lp = linfo; *lp; lp = &(*lp)->next) /* NOTHING */;
+	*lp = h;
+
+	return 0;
+}
+
+int calc_host_len(struct rtmsg *r)
+{
+	if (r->rtm_family == AF_INET6)
+		return 128;
+	else if (r->rtm_family == AF_INET)
+		return 32;
+	else if (r->rtm_family == AF_DECnet)
+		return 16;
+	else if (r->rtm_family == AF_IPX)
+		return 80;
+	else
+		return -1;
+}
+
+int make_route_file(char *filename) {
+	struct rtnl_handle rth = { .fd = -1 };
+
+	if (rtnl_open(&rth, 0) < 0) {
+		exit(1);
 	}
 
-	printf("recv\n");
+	int preferred_family = AF_PACKET;
 
-	n = recv(soc, buf, sizeof(buf), 0);
-	if (n < 0) {
-		perror("recvmsg");
-		return 1;
+	if (rtnl_wilddump_request(&rth, preferred_family, RTM_GETROUTE) < 0) {
+		perror("Cannot send dump request");
+		exit(1);
 	}
 
-	for (nlhdr = (struct nlmsghdr *)buf; NLMSG_OK(nlhdr, n); nlhdr = NLMSG_NEXT(nlhdr, n)) {
-		struct rtmsg *rtm;/* hack */
-		struct rtattr *rta;
-		int n;
+	struct nlmsg_list *rinfo = NULL;
 
-		printf("====\n");
-		// printf("len : %d\n", nlhdr->nlmsg_len);
-		// printf("type : %d\n", nlhdr->nlmsg_type);
+	if (rtnl_dump_filter(&rth, store_nlmsg, &rinfo, NULL, NULL) < 0) {
+		fprintf(stderr, "Dump terminated\n");
+		exit(1);
+	}
 
-		if (nlhdr->nlmsg_type != RTM_NEWROUTE/* hack */) {
-			printf("error : %d\n", nlhdr->nlmsg_type);
-			continue;
+	struct nlmsg_list *r, *n;
+
+	for (r = rinfo; r; r = n) {
+		n = r->next;
+		struct nlmsghdr *nlhdr = &(r->h);
+
+		__u32 table;
+
+		if (nlhdr->nlmsg_type != RTM_NEWROUTE && nlhdr->nlmsg_type != RTM_DELROUTE) {
+			fprintf(stderr, "Not a route: %08x %08x %08x\n",
+				nlhdr->nlmsg_len, nlhdr->nlmsg_type, nlhdr->nlmsg_flags);
+			return 0;
 		}
 
-		rtm = NLMSG_DATA(nlhdr);
+		printf("\n== ROUTE INFO ==\n");
+		printf("len: %d\n", nlhdr->nlmsg_len);
+		printf("type: %d\n", nlhdr->nlmsg_type);
 
-		printf(" family : %d\n", rtm->rtm_family);
-		printf(" flags : %d\n", rtm->rtm_flags);
-		printf(" scope : %d\n", rtm->rtm_scope);
+		struct rtmsg *rtm = NLMSG_DATA(nlhdr);
+		int	len = nlhdr->nlmsg_len - NLMSG_LENGTH(sizeof(*rtm));
 
-		n = nlhdr->nlmsg_len - NLMSG_LENGTH(sizeof(struct rtmsg));
+		if (len < 0) {
+			fprintf(stderr, "BUG: wrong nlmsg len %d\n", len);
+			return -1;
+		}
 
-		for (rta = (struct rtattr *)RTM_RTA(rtm/* hack */); RTA_OK(rta, n); rta = RTA_NEXT(rta, n)) {
-			printf(" type = %2d, len = %2d\t", rta->rta_type, rta->rta_len);
+		int host_len = calc_host_len(rtm);
 
-			switch (rta->rta_type) {
-				/* hack */
-				case RTN_UNSPEC:
-				{
-					printf("UNSPEC\n");
-					break;				
+		// Analyze rtattr Message
+		struct rtattr *tb[RTA_MAX+1];
+		parse_rtattr(tb, RTA_MAX, RTM_RTA(rtm), len);
+		table = rtm_get_table(r, tb);
+
+		if (tb[RTA_DST]) {
+			if (rtm->rtm_dst_len != host_len) {
+				if (rtm->rtm_family == AF_INET) {
+					unsigned char *a = RTA_DATA(tb[RTA_DST]);
+					char buf[64];
+					sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
+					printf("DST -> %d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+
 				}
-				case RTA_DST:/*	ゲートウェイまたはダイレクトな経路 */
-				{
-					printf("DST,RTN_UNICAST\n");
-					char dst_addr[32];
-					inet_ntop(AF_INET, RTA_DATA(rta), dst_addr, sizeof(dst_addr));
-					printf("%s\n", dst_addr);
-					break;
+				else if (rtm->rtm_family == AF_INET6) {
+					unsigned char *a = RTA_DATA(tb[RTA_DST]);
+					char buf[64];
+					inet_ntop(AF_INET6, a, buf, sizeof(buf));
+					printf("DST -> %s\n", buf);
 				}
-				case RTA_SRC:	/* ローカルインターフェースの経路 */
-				{
-					printf("SRC,RTN_LOCAL\n");
-					char src_addr[32];
-					inet_ntop(AF_INET, RTA_DATA(rta), src_addr, sizeof(src_addr));
-					printf("%s\n", src_addr);
-					break;
-				}
-				case RTA_IIF:	/* ローカルなブロードキャスト経路 (ブロードキャストとして送信される) */
-				{
-					printf("IIF,RTN_BROADCAST\n");
-					char buf[128];
-					memset(buf, 0 , sizeof(buf));
-					if_indextoname(*(int *)RTA_DATA(rta), buf);
-					printf("%s\n", buf);
-					break;
-				}
-				case RTA_OIF:	/* ローカルなブロードキャスト経路 (ユニキャストとして送信される) */
-				{
-					printf("OIF,RTN_ANYCAST\n");
-					char buf[128];
-					memset(buf, 0 , sizeof(buf));
-					if_indextoname(*(int *)RTA_DATA(rta), buf);
-					printf("%s\n", buf);
-					break;
-				}
-				case RTN_MULTICAST:	/* マルチキャスト経路 */
-				{
-					printf("GATEWAY,RTN_MULTICAST\n");
-					char gate_addr[32];
-					inet_ntop(AF_INET, RTA_DATA(rta), gate_addr, sizeof(gate_addr));
-					printf("%s\n", gate_addr);
-					break;
-				}
-				case RTA_PRIORITY:	/* パケットを捨てる経路 */
-				{
-					printf("PRIORITY,RTN_BLACKHOLE\n");
-					printf("%d\n", *(int *)RTA_DATA(rta));
-					break;
-				}
-				case RTA_PREFSRC:	/* 到達できない行き先 */
-				{
-					printf("PREFSRC,RTN_UNREACHABLE\n");
-					char prefsrc_addr[32];
-					inet_ntop(AF_INET, RTA_DATA(rta), prefsrc_addr, sizeof(prefsrc_addr));
-					printf("%s\n", prefsrc_addr);
-					break;
-				}
-				case RTA_METRICS:	/* パケットを拒否する経路 */
-				{
-					printf("METRICS,RTN_PROHIBIT\n");
-					printf("%d\n", *(int *)RTA_DATA(rta));
-					break;
-				}
-				case RTA_MULTIPATH:	/* 経路探索を別のテーブルで継続 */
-				{
-					printf("MULTIPATH,RTN_THROW\n");
-				// 	printf("%d\n", RTA_DATA(rta));
-					break;
-				}
-				case RTA_PROTOINFO:	 /* ネットワークアドレスの変換ルール */
-				{
-					printf("PROTOINFO,RTN_NAT\n");
-					// printf("%d\n", RTA_DATA(rta));
-					break;
-				}
-				case RTA_FLOW:	/* 外部レゾルバを参照 (実装されていない) */
-				{
-					printf("FLOW,RTN_XRESOLVE\n");
-					// printf("%d\n", RTA_DATA(rta));
-					break;
-				}
-				case RTA_CACHEINFO:
-				{
-					printf("CACHEINFO\n");
-					break;
-				}
-				default:
-				printf("other type\n");
-				break;
+			// } else {
+				// fprintf(stderr, "%s ", format_host(r->rtm_family,
+				// 	RTA_PAYLOAD(tb[RTA_DST]),
+				// 	RTA_DATA(tb[RTA_DST]),
+				// 	abuf, sizeof(abuf))
+				// );
 			}
 		}
+
+		if(tb[RTA_SRC]) {
+			if (rtm->rtm_src_len != host_len) {
+				if (rtm->rtm_family == AF_INET) {
+					unsigned char *a = RTA_DATA(tb[RTA_SRC]);
+					char buf[64];
+					sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
+					printf("SRC -> %d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+
+				}
+				else if (rtm->rtm_family == AF_INET6) {
+					unsigned char *a = RTA_DATA(tb[RTA_SRC]);
+					char buf[64];
+					inet_ntop(AF_INET6, a, buf, sizeof(buf));
+					printf("SRC -> %s\n", buf);
+				}
+			}
+		}
+
+		if (tb[RTA_IIF]) {
+			printf("IIF -> %d\n", *(int*)RTA_DATA(tb[RTA_IIF]));
+		}
+
+		if (tb[RTA_OIF]) {
+			printf("OIF -> %d\n", *(int*)RTA_DATA(tb[RTA_OIF]));
+		}
+
+		if (tb[RTA_GATEWAY]) {
+			if (rtm->rtm_family == AF_INET) {
+				unsigned char *a = RTA_DATA(tb[RTA_GATEWAY]);
+				char buf[64];
+				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
+				printf("GATEWAY -> %d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+
+			}
+			else if (rtm->rtm_family == AF_INET6) {
+				unsigned char *a = RTA_DATA(tb[RTA_GATEWAY]);
+				char buf[64];
+				inet_ntop(AF_INET6, a, buf, sizeof(buf));
+				printf("GATEWAY -> %s\n", buf);
+			}
+		}
+
+		if (tb[RTA_PRIORITY]) {
+			fprintf(stderr, "metric %d\n", *(__u32*)RTA_DATA(tb[RTA_PRIORITY]));
+		}
+
+		if (tb[RTA_PREFSRC]) {
+			if (rtm->rtm_family == AF_INET) {
+				unsigned char *a = RTA_DATA(tb[RTA_PREFSRC]);
+				char buf[64];
+				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
+				printf("PREFSRC -> %d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+
+			}
+			else if (rtm->rtm_family == AF_INET6) {
+				unsigned char *a = RTA_DATA(tb[RTA_PREFSRC]);
+				char buf[64];
+				inet_ntop(AF_INET6, a, buf, sizeof(buf));
+				printf("PREFSRC -> %s\n", buf);
+			}
+		}
+
+		if (tb[RTA_METRICS]) {
+			printf("METRICS -> %d\n", *(int*)RTA_DATA(tb[RTA_METRICS]));
+		}
+
+		if (tb[RTA_MULTIPATH]) {
+
+		}
 	}
-
-	close(soc);
-
+	free(r);
+	rtnl_close(&rth);
 	return 0;
 }
