@@ -29,6 +29,8 @@ static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n, void *
 }
 
 int make_address_file(char *filename) {
+	json_t *IFA_json = json_object();
+	json_t *address_array = json_array();
 
 	struct rtnl_handle rth = { .fd = -1 };
 
@@ -57,9 +59,9 @@ int make_address_file(char *filename) {
 		struct nlmsghdr *nlhdr = &(a->h);
 
 		// Print Netlink Message length and type
-		printf("\n===\n");
-		printf("len: %d\n", nlhdr->nlmsg_len);
-		printf("type: %d\n", nlhdr->nlmsg_type);
+		// printf("\n===\n");
+		// printf("len: %d\n", nlhdr->nlmsg_len);
+		// printf("type: %d\n", nlhdr->nlmsg_type);
 
 		struct ifaddrmsg *ifamsg = NLMSG_DATA(nlhdr);
 
@@ -69,8 +71,12 @@ int make_address_file(char *filename) {
 			continue;
 		}
 
+		json_t *address_json = json_object();
+		json_t *ifaddrmsg_json = json_object();
+		json_object_set_new(ifaddrmsg_json, "interface", json_integer(ifamsg->ifa_index));
+
 		// Add Each Parameter to json file
-		printf("index: %d\n", ifamsg->ifa_index);
+		// printf("index: %d\n", ifamsg->ifa_index);
 
 		// Analyze rtattr Message
 		int len = nlhdr->nlmsg_len - NLMSG_LENGTH(sizeof(*ifamsg));;
@@ -78,14 +84,17 @@ int make_address_file(char *filename) {
 		struct rtattr *tb[IFA_MAX+1];
 		parse_rtattr(tb, IFA_MAX, IFA_RTA(ifamsg), len);
 
+		json_t *rta_json = json_object();
 
 		if (tb[IFA_LABEL]) {
-			printf("%s\n", (char *)RTA_DATA(tb[IFA_LABEL]));
+			// printf("%s\n", (char *)RTA_DATA(tb[IFA_LABEL]));
+			json_object_set_new(rta_json, "LABEL", json_string((char *)RTA_DATA(tb[IFA_LABEL])));
 		}
 		else {
 			char name[8];
 			if_indextoname(ifamsg->ifa_index, name);
-			printf("%s\n", name);
+			json_object_set_new(rta_json, "LABEL", json_string(name));
+			// printf("%s\n", name);
 		}
 
 		if (tb[IFA_ADDRESS]) {
@@ -93,14 +102,16 @@ int make_address_file(char *filename) {
 				unsigned char *a = RTA_DATA(tb[IFA_ADDRESS]);
 				char buf[64];
 				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
-				printf("ADDRESS -> %d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+				json_object_set_new(rta_json, "ADDRESS", json_string(buf));
+				// printf("ADDRESS -> %d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
 
 			}
 			else if (ifamsg->ifa_family == AF_INET6) {
 				unsigned char *a = RTA_DATA(tb[IFA_ADDRESS]);
 				char buf[64];
 				inet_ntop(AF_INET6, a, buf, sizeof(buf));
-				printf("ADDRESS -> %s\n", buf);
+				json_object_set_new(rta_json, "ADDRESS", json_string(buf));
+				// printf("ADDRESS -> %s\n", buf);
 			}
 		}
 		if (tb[IFA_LOCAL]) {
@@ -108,14 +119,16 @@ int make_address_file(char *filename) {
 				unsigned char *a = RTA_DATA(tb[IFA_LOCAL]);
 				char buf[64];
 				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
-				printf("LOCAL -> %d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+				json_object_set_new(rta_json, "LOCAL", json_string(buf));
+				// printf("LOCAL -> %d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
 
 			}
 			else if (ifamsg->ifa_family == AF_INET6) {
 				unsigned char *a = RTA_DATA(tb[IFA_LOCAL]);
 				char buf[64];
 				inet_ntop(AF_INET6, a, buf, sizeof(buf));
-				printf("LOCAL -> %s\n", buf);
+				json_object_set_new(rta_json, "LOCAL", json_string(buf));
+				// printf("LOCAL -> %s\n", buf);
 			}
 		}
 		if (tb[IFA_BROADCAST]) {
@@ -123,14 +136,16 @@ int make_address_file(char *filename) {
 				unsigned char *a = RTA_DATA(tb[IFA_BROADCAST]);
 				char buf[64];
 				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
-				printf("BROADCAST ->%d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+				json_object_set_new(rta_json, "BROADCAST", json_string(buf));
+				// printf("BROADCAST ->%d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
 
 			}
 			else if (ifamsg->ifa_family == AF_INET6) {
 				unsigned char *a = RTA_DATA(tb[IFA_BROADCAST]);
 				char buf[64];
 				inet_ntop(AF_INET6, a, buf, sizeof(buf));
-				printf("BROADCAST -> %s\n", buf);
+				json_object_set_new(rta_json, "BROADCAST", json_string(buf));
+				// printf("BROADCAST -> %s\n", buf);
 			}
 		}
 		if (tb[IFA_ANYCAST]) {
@@ -138,32 +153,41 @@ int make_address_file(char *filename) {
 				unsigned char *a = RTA_DATA(tb[IFA_ANYCAST]);
 				char buf[64];
 				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
-				printf("ANYCAST ->%d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+				json_object_set_new(rta_json, "ANYCAST", json_string(buf));				
+				// printf("ANYCAST ->%d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
 
 			}
 			else if (ifamsg->ifa_family == AF_INET6) {
 				unsigned char *a = RTA_DATA(tb[IFA_ANYCAST]);
 				char buf[64];
 				inet_ntop(AF_INET6, a, buf, sizeof(buf));
-				printf("ANYCAST -> %s\n", buf);
+				json_object_set_new(rta_json, "ANYCAST", json_string(buf));			
+				// printf("ANYCAST -> %s\n", buf);
 			}
 		}
 		if (tb[IFA_CACHEINFO]) {
 			struct ifa_cacheinfo *ci = RTA_DATA(tb[IFA_CACHEINFO]);
-			fprintf(stderr, "valid_lft ");
+			char buf1[64];
+			char buf2[64];
+			// fprintf(stderr, "valid_lft ");
 			if (ci->ifa_valid == INFINITY_LIFE_TIME)
-				fprintf(stderr, "forever");
+				sprintf(buf1, "%s", "forever");
 			else
-				fprintf(stderr, "%usec", ci->ifa_valid);
-			fprintf(stderr, " preferred_lft ");
+				sprintf(buf1, "%usec", ci->ifa_valid);
+			// printf("%s\n", buf1);
+			json_object_set_new(rta_json, "CACHEINFO_VALID", json_string(buf1));
+
+			// fprintf(stderr, "preferred_lft ");
 			if (ci->ifa_prefered == INFINITY_LIFE_TIME)
-				fprintf(stderr, "forever\n");
+				sprintf(buf2, "%s", "forever");
 			else {
 				if (ifamsg->ifa_flags&IFA_F_DEPRECATED)
-					fprintf(stderr, "%dsec\n", ci->ifa_prefered);
+					sprintf(buf2, "%dsec", ci->ifa_prefered);
 				else
-					fprintf(stderr, "%usec\n", ci->ifa_prefered);
+					sprintf(buf2, "%usec", ci->ifa_prefered);
 			}
+			// printf("%s\n", buf2);
+			json_object_set_new(rta_json, "CACHEINFO_PREFERRED", json_string(buf2));
 
 		}
 		if (tb[IFA_MULTICAST]) {
@@ -171,21 +195,36 @@ int make_address_file(char *filename) {
 				unsigned char *a = RTA_DATA(tb[IFA_MULTICAST]);
 				char buf[64];
 				sprintf(buf, "%d:%d:%d:%d", a[0], a[1], a[2], a[3]);
-				printf("MULTICAST ->%d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+				json_object_set_new(rta_json, "MULTICAST", json_string(buf));
+				// printf("MULTICAST ->%d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
 
 			}
 			else if (ifamsg->ifa_family == AF_INET6) {
 				unsigned char *a = RTA_DATA(tb[IFA_MULTICAST]);
 				char buf[64];
 				inet_ntop(AF_INET6, a, buf, sizeof(buf));
-				printf("MULTICAST -> %s\n", buf);
+				json_object_set_new(rta_json, "MULTICAST", json_string(buf));
+				// printf("MULTICAST -> %s\n", buf);
 			}
 
 		}
 		if (tb[IFA_FLAGS]) {
-			printf("FLAGS -> %d\n", *(int *)RTA_DATA(tb[IFA_FLAGS]));
+			json_object_set_new(rta_json, "FLAGS", json_integer(*(int *)RTA_DATA(tb[IFA_FLAGS])));
+			// printf("FLAGS -> %d\n", *(int *)RTA_DATA(tb[IFA_FLAGS]));
 		}
+
+		json_object_set_new(address_json, "rta", rta_json);
+
+		json_array_append(address_array, address_json);
 	}
+
+	json_object_set_new(IFA_json, "IFA", address_array);
+
+	// print json
+	char *json_data = json_dumps(IFA_json, JSON_INDENT(4));
+	sprintf(json_data, "%s\n", json_data); // add new line to end of file
+	printf("%s", json_data);
+
 	free(a);
 
 	rtnl_close(&rth);
