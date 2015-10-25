@@ -75,6 +75,8 @@ int make_address_file(char *filename) {
 		json_t *ifaddrmsg_json = json_object();
 		json_object_set_new(ifaddrmsg_json, "interface", json_integer(ifamsg->ifa_index));
 
+		json_object_set_new(address_json, "ifaddrmsg", ifaddrmsg_json);
+
 		// Add Each Parameter to json file
 		// printf("index: %d\n", ifamsg->ifa_index);
 
