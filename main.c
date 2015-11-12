@@ -21,15 +21,16 @@ int main(int argc, char **argv) {
 			// if (make_interface_file(".negi/negi4.json") < 0) {
 			// 	fprintf(stderr, "Error: can't make interface file");
 			// }
-			// if (make_address_file(".negi/negi6.json") < 0) {
-			// 	fprintf(stderr, "Error: can't make address file");
-			// }
-			if (make_route_file(".negi/negi5.json") < 0) {
-				fprintf(stderr, "Error: can't make route file");
+			if (make_address_file(".negi/negi6.json") < 0) {
+				fprintf(stderr, "Error: can't make address file");
 			}
+			// if (make_route_file(".negi/negi5.json") < 0) {
+			// 	fprintf(stderr, "Error: can't make route file");
+			// }
 		}
 		else if (strcmp("revert", *argv) == 0) {
-			read_interface_file(".negi/negi4.json");
+			// read_interface_file(".negi/negi4.json");
+			read_address_file(".negi/negi6.json");
 		}
 	}
 	return 0;

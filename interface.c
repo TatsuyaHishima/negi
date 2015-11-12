@@ -601,7 +601,7 @@ int down_interface(int index) {
 
 	struct iplink_req {
 		struct nlmsghdr     n;
-		struct ifinfomsg    i;
+		struct ifinfomsg    ifi;
 		char            buf[1024];
 	};
 
@@ -615,12 +615,12 @@ int down_interface(int index) {
 
 	memset(&req, 0, sizeof(req));
 	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
-	req.i.ifi_family = AF_UNSPEC;
+	req.ifi.ifi_family = AF_UNSPEC;
 	req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_EXCL;
 	req.n.nlmsg_type = RTM_SETLINK;
-	req.i.ifi_index = index;
-	req.i.ifi_change |= IFF_UP;
-	req.i.ifi_flags &= ~IFF_UP;
+	req.ifi.ifi_index = index;
+	req.ifi.ifi_change |= IFF_UP;
+	req.ifi.ifi_flags &= ~IFF_UP;
 
 	if (rtnl_talk(&rth, &req.n, 0, 0, NULL, NULL, NULL) < 0) {
 		exit(2);
@@ -661,7 +661,7 @@ int read_interface_file(char* filename) {
 
 		struct iplink_req {
 			struct nlmsghdr     n;
-			struct ifinfomsg    i;
+			struct ifinfomsg    ifi;
 			char            buf[1024];
 		};
 
@@ -669,12 +669,12 @@ int read_interface_file(char* filename) {
 
 		memset(&req, 0, sizeof(req));
 		req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
-		req.i.ifi_family = AF_UNSPEC;
+		req.ifi.ifi_family = AF_UNSPEC;
 		req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL;
-		req.i.ifi_index = (int)json_number_value(json_object_get(ifinfomsg_json, "index"));
-		req.i.ifi_change =  0xFFFFFFFF;
-		req.i.ifi_type = 0;
-		req.i.ifi_flags = (unsigned int)json_number_value(json_object_get(ifinfomsg_json, "flags"));
+		req.ifi.ifi_index = (int)json_number_value(json_object_get(ifinfomsg_json, "index"));
+		req.ifi.ifi_change =  0xFFFFFFFF;
+		req.ifi.ifi_type = 0;
+		req.ifi.ifi_flags = (unsigned int)json_number_value(json_object_get(ifinfomsg_json, "flags"));
 
 		// interface_index = virtual or real
 		int real_or_virtual = interface_real_or_virtual(ifinfomsg_json);
@@ -746,12 +746,12 @@ int read_interface_file(char* filename) {
 				}
 				switch (i) {
 					case 2: // DOWN
-					req.i.ifi_change |= IFF_UP;
-					req.i.ifi_flags &= ~IFF_UP;
+					req.ifi.ifi_change |= IFF_UP;
+					req.ifi.ifi_flags &= ~IFF_UP;
 					break;
 					case 6: // UP
-					req.i.ifi_change |= IFF_UP;
-					req.i.ifi_flags |= IFF_UP;
+					req.ifi.ifi_change |= IFF_UP;
+					req.ifi.ifi_flags |= IFF_UP;
 					break;
 					default:
 					break;
@@ -971,15 +971,15 @@ int read_interface_file(char* filename) {
 
 		}
 		if (real_or_virtual == 1) {
-			down_interface(req.i.ifi_index);
+			down_interface(req.ifi.ifi_index);
 		}
-		fprintf(stderr, "%d: interface \"%s\" message is ready.\n", req.i.ifi_index, interface_name);
+		fprintf(stderr, "%d: interface \"%s\" message is ready.\n", req.ifi.ifi_index, interface_name);
 
 		if (rtnl_talk(&rth, &req.n, 0, 0, NULL, NULL, NULL) < 0) {
 			exit(2);
 		}
 
-		fprintf(stderr, "%d: interface \"%s\" was changed.\n\n", req.i.ifi_index, interface_name);
+		fprintf(stderr, "%d: interface \"%s\" was changed.\n\n", req.ifi.ifi_index, interface_name);
 
 	}
 	fprintf(stderr, "Success arranging all interfaces!\n\n");
