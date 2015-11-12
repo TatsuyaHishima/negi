@@ -75,6 +75,7 @@ int make_address_file(char *filename) {
 		json_t *address_json = json_object();
 		json_t *ifaddrmsg_json = json_object();
 		json_object_set_new(ifaddrmsg_json, "interface", json_integer(ifamsg->ifa_index));
+		// json_object_set_new(ifaddrmsg_json, "prefixlen", json_string((char *)ifamsg->ifa_prefixlen));
 
 		json_object_set_new(address_json, "ifaddrmsg", ifaddrmsg_json);
 
@@ -88,6 +89,7 @@ int make_address_file(char *filename) {
 		parse_rtattr(tb, IFA_MAX, IFA_RTA(ifamsg), len);
 
 		json_t *rta_json = json_object();
+
 
 		if (tb[IFA_LABEL]) {
 			json_object_set_new(rta_json, "LABEL", json_string((char *)RTA_DATA(tb[IFA_LABEL])));
@@ -122,6 +124,10 @@ int make_address_file(char *filename) {
 				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
 				json_object_set_new(rta_json, "LOCAL", json_string(buf));
 				// printf("LOCAL -> %d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
+				if (tb[IFA_ADDRESS] == NULL || memcmp(RTA_DATA(tb[IFA_ADDRESS]), RTA_DATA(tb[IFA_LOCAL]), 4) == 0) {
+					// printf("netmask: /%d ", ifamsg->ifa_prefixlen);
+					json_object_set_new(rta_json, "prefixlen", json_integer(ifamsg->ifa_prefixlen));
+				}
 
 			}
 			else if (ifamsg->ifa_family == AF_INET6) {
@@ -388,19 +394,20 @@ int read_address_file(char* filename) {
 		req.ifa.ifa_scope = 0;
 		req.n.nlmsg_type = RTM_NEWADDR;
 
-		printf("nlmsg_len: %d\n",req.n.nlmsg_len);
-		printf("nlmsg_flags: %d\n",req.n.nlmsg_flags);
-		printf("nlmsg_type: %d\n",req.n.nlmsg_type);
-		printf("ifa_family: %d\n",req.ifa.ifa_family);
-		printf("ifa_flags: %d\n",req.ifa.ifa_flags);
-		printf("ifa_prefixlen: %d\n",req.ifa.ifa_prefixlen);
-		printf("ifa_scope: %d\n",req.ifa.ifa_scope);
-		printf("ifa_index: %d\n",req.ifa.ifa_index);
-		printf("nlmsg_seq: %d\n",req.n.nlmsg_seq);
-		printf("nlmsg_pid: %d\n",req.n.nlmsg_pid);
+		// printf("nlmsg_len: %d\n",req.n.nlmsg_len);
+		// printf("nlmsg_flags: %d\n",req.n.nlmsg_flags);
+		// printf("nlmsg_type: %d\n",req.n.nlmsg_type);
+		// printf("ifa_family: %d\n",req.ifa.ifa_family);
+		// printf("ifa_flags: %d\n",req.ifa.ifa_flags);
+		// printf("ifa_prefixlen: %d\n",req.ifa.ifa_prefixlen);
+		// printf("ifa_scope: %d\n",req.ifa.ifa_scope);
+		// printf("ifa_index: %d\n",req.ifa.ifa_index);
+		// printf("nlmsg_seq: %d\n",req.n.nlmsg_seq);
+		// printf("nlmsg_pid: %d\n",req.n.nlmsg_pid);
 
 		inet_prefix lcl;
 		int link_local_flag = 0;
+		int prefixlen_flag = 0;
 		const char *key;
 		json_t *value;
 		json_object_foreach(rta_json, key, value) {
@@ -408,7 +415,9 @@ int read_address_file(char* filename) {
 			if (strcmp(key, "LOCAL") == 0) {
 				get_prefix(&lcl, (char *)json_string_value(value), req.ifa.ifa_family);
 				addattr_l(&req.n, sizeof(req), IFA_LOCAL, &lcl.data, lcl.bytelen);
-				req.ifa.ifa_prefixlen = lcl.bitlen; //32; // AF_INET6なら64
+				if (prefixlen_flag == 0) {
+					req.ifa.ifa_prefixlen = lcl.bitlen; //32; // AF_INET6なら64
+				}
 				req.ifa.ifa_family = lcl.family; // AF_INET6
 			}
 
@@ -418,9 +427,24 @@ int read_address_file(char* filename) {
 				}
 				get_prefix(&lcl, (char *)json_string_value(value), req.ifa.ifa_family);
 				addattr_l(&req.n, sizeof(req), IFA_ADDRESS, &lcl.data, lcl.bytelen);
-				req.ifa.ifa_prefixlen = lcl.bitlen; //32; // AF_INET6なら64
+				if (prefixlen_flag == 0) {
+					req.ifa.ifa_prefixlen = lcl.bitlen; //32; // AF_INET6なら64
+				}
 				req.ifa.ifa_family = lcl.family; // AF_INET6
 				printf("lcl.family: %d\n",lcl.family);
+			}
+			if (strcmp(key, "BROADCAST") == 0) {
+				inet_prefix addr;
+				get_addr(&addr, (char *)json_string_value(value), req.ifa.ifa_family);
+				if (req.ifa.ifa_family == AF_UNSPEC)
+					req.ifa.ifa_family = addr.family;
+				addattr_l(&req.n, sizeof(req), IFA_BROADCAST, &addr.data, addr.bytelen);
+			}
+
+			if (strcmp(key, "prefixlen") == 0) {
+				printf("prefixlen: %d\n", json_integer_value(value));
+				req.ifa.ifa_prefixlen = json_integer_value(value);
+				prefixlen_flag = 1;
 			}
 		}
 
@@ -432,6 +456,10 @@ int read_address_file(char* filename) {
 		if (req.ifa.ifa_family == 0) {
 			printf("No address data\n");
 			exit(5);
+		}
+
+		if (req.ifa.ifa_family == AF_INET) {
+
 		}
 
 		ll_init_map(&rth);
