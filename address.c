@@ -227,7 +227,20 @@ int make_address_file(char *filename) {
 	return 0;
 }
 
+int link_local(char *address) {
+	if (strncmp(address, "fe80:", 5) == 0) {
+		return 1;
+	}
+	return 0;
+}
+
 int delete_address(int interface, char *address) {
+
+	if (link_local(address)) {
+		fprintf(stderr, "Can't delete ipv6 link local address.\n");
+		return 0;
+	}
+
 	struct rtnl_handle rth = { .fd = -1 };
 
 	if (rtnl_open(&rth, 0) < 0) {
@@ -261,7 +274,8 @@ int delete_address(int interface, char *address) {
 	if (rtnl_talk(&rth, &req.n, 0, 0, NULL, NULL, NULL) < 0) {
 		exit(2);
 	}
-	printf("deleted\n");
+
+	printf("delete %s\n", address);
 
 }
 
@@ -275,7 +289,7 @@ int delete_all_address() {
 	int preferred_family = AF_PACKET;
 
 	if (rtnl_wilddump_request(&rth, preferred_family, RTM_GETADDR) < 0) {
-		perror("Cannot send dump request");
+		perror("Cannot send dump request\n");
 		exit(1);
 	}
 
@@ -315,9 +329,7 @@ int delete_all_address() {
 				inet_ntop(AF_INET6, a, buf, sizeof(buf));
 			}
 		}
-		if (ifamsg->ifa_index == 1 && strcmp(buf,"") != 0) { // loだけ消去する
-			delete_address(ifamsg->ifa_index, buf);
-		}
+		delete_address(ifamsg->ifa_index, buf);
 	}
 	free(a);
 	rtnl_close(&rth);
@@ -335,7 +347,7 @@ int read_address_file(char* filename) {
 	}
 
 	// 全部のアドレス情報を削除する必要あり
-	// delete_all_address();
+	delete_all_address();
 
 	json_t *IFA_json = json_object_get(address_json, "IFA");
 	int i;
@@ -372,7 +384,7 @@ int read_address_file(char* filename) {
 		// req.ifa.ifa_family = AF_INET; // AF_INET6
 
 		req.ifa.ifa_flags = 0;
-
+		req.ifa.ifa_family = 0;
 		req.ifa.ifa_scope = 0;
 		req.n.nlmsg_type = RTM_NEWADDR;
 
@@ -388,25 +400,38 @@ int read_address_file(char* filename) {
 		printf("nlmsg_pid: %d\n",req.n.nlmsg_pid);
 
 		inet_prefix lcl;
+		int link_local_flag = 0;
 		const char *key;
 		json_t *value;
 		json_object_foreach(rta_json, key, value) {
-
-			// if (strcmp(key, "IFNAME") == 0) {
-			// 	interface_name = (char *)json_string_value(value);
-			// 	addattr_l(&req.n, sizeof(req), IFLA_IFNAME, (char *)json_string_value(value), strlen(json_string_value(value))+1);
-			// }
-
+			printf("%s\n", key);
 			if (strcmp(key, "LOCAL") == 0) {
 				get_prefix(&lcl, (char *)json_string_value(value), req.ifa.ifa_family);
 				addattr_l(&req.n, sizeof(req), IFA_LOCAL, &lcl.data, lcl.bytelen);
 				req.ifa.ifa_prefixlen = lcl.bitlen; //32; // AF_INET6なら64
 				req.ifa.ifa_family = lcl.family; // AF_INET6
-			// } else {
-				// printf("No address data\n");
-				// exit(5);
 			}
 
+			if (strcmp(key, "ADDRESS") == 0) {
+				if (link_local((char *)json_string_value(value))) {
+					link_local_flag = 1;
+				}
+				get_prefix(&lcl, (char *)json_string_value(value), req.ifa.ifa_family);
+				addattr_l(&req.n, sizeof(req), IFA_ADDRESS, &lcl.data, lcl.bytelen);
+				req.ifa.ifa_prefixlen = lcl.bitlen; //32; // AF_INET6なら64
+				req.ifa.ifa_family = lcl.family; // AF_INET6
+				printf("lcl.family: %d\n",lcl.family);
+			}
+		}
+
+		if (link_local_flag) {
+			fprintf(stderr, "Don't assign link local address.\n");
+			continue;
+		}
+
+		if (req.ifa.ifa_family == 0) {
+			printf("No address data\n");
+			exit(5);
 		}
 
 		ll_init_map(&rth);
