@@ -321,8 +321,6 @@
 
  	iov.iov_base = buf;
 
-
-
  	while (1) {
  		iov.iov_len = sizeof(buf);
  		status = recvmsg(rtnl->fd, &msg, 0);

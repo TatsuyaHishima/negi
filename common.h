@@ -6,6 +6,7 @@
 
 
 int make_file(char *filename, char *string);
+int rtnl_talkE(struct rtnl_handle *rtnl, struct nlmsghdr *n, pid_t peer, unsigned groups, struct nlmsghdr *answer, rtnl_filter_t junk, void *jarg);
 
 struct nlmsg_list
 {
