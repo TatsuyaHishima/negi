@@ -38,7 +38,7 @@ static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n, void *
 	return 0;
 }
 
-json_t* make_interface_file(char *filename) {
+json_t* make_interface_file() {
 	json_t *interfaces_json = json_object();
 	json_t *ifTable_json = json_object();
 	json_t *ifEntry_array = json_array();
@@ -137,14 +137,6 @@ json_t* make_interface_file(char *filename) {
 	json_object_set_new(ifTable_json, "ifEntry", ifEntry_array);
 	json_object_set_new(interfaces_json, "ifTable", ifTable_json);
 
-
-	// print json
-	char *json_data = json_dumps(interfaces_json, JSON_INDENT(4));
-	sprintf(json_data, "%s\n", json_data); // add new line to end of file
-	// printf("%s", json_data);
-
-	make_file(filename, json_data);
-	free(json_data);
 	free(l);
 
 	rtnl_close(&rth);

@@ -3,7 +3,7 @@
 
 #include <jansson.h>
 
-json_t* make_interface_file(char *filename);
+json_t* make_interface_file();
 int read_interface_file(char *filename);
 
 #endif
