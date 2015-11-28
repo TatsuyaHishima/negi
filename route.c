@@ -100,7 +100,8 @@ int make_route_file(char *filename) {
 
 		json_object_set_new(routemsg_json, "rtm_type", json_integer(rtm->rtm_type));
 		json_object_set_new(routemsg_json, "rtm_protocol", json_integer(rtm->rtm_protocol));
-
+		json_object_set_new(routemsg_json, "rtm_scope", json_integer(rtm->rtm_scope));
+		json_object_set_new(routemsg_json, "rtm_table", json_integer(rtm->rtm_table));
 
 		json_object_set_new(route_json, "routemsg", routemsg_json);
 
@@ -160,7 +161,7 @@ int make_route_file(char *filename) {
 
 		if (tb[RTA_OIF]) {
 			// printf("OIF -> %d\n", *(int*)RTA_DATA(tb[RTA_OIF]));
-			json_object_set_new(rta_json, "IIF", json_integer(*(int*)RTA_DATA(tb[RTA_OIF])));
+			json_object_set_new(rta_json, "OIF", json_integer(*(int*)RTA_DATA(tb[RTA_OIF])));
 		}
 
 		if (tb[RTA_GATEWAY]) {
@@ -363,16 +364,307 @@ int delete_all_route() {
 		}
 	}
 
+	printf("delete all routes.\n");
 	free(r);
 	rtnl_close(&rth);
 	return 0;
 }
 
 int read_route_file(char *filename) {
+
+	json_error_t error;
+	json_t *route_json = json_load_file(filename , JSON_DECODE_ANY, &error);
+
+	if(!route_json) {
+		fprintf(stderr, "Error: can't read json file.\n");
+		return -1;
+	}
+
 	// routeの削除
 	delete_all_route();
 
+	json_t *RTM_json = json_object_get(route_json, "RTM");
+	int i;
+	for (i = 0; i < (int)json_array_size(RTM_json); i++) {
+		json_t *each_route_data = json_array_get(RTM_json, i);
+		json_t *rtmsg_json = json_object_get(each_route_data, "routemsg");
+		json_t *rta_json = json_object_get(each_route_data, "rta");
 
+		// print json
+		// char *json_data = json_dumps(rtmsg_json, JSON_INDENT(4));
+		// printf("%s\n", json_data);
+		// free(json_data);
+
+		struct rtnl_handle rth = { .fd = -1 };
+
+		if (rtnl_open(&rth, 0) < 0) {
+			exit(1);
+		}
+
+		struct iplink_req {
+			struct nlmsghdr     n;
+			struct rtmsg    rtm;
+			char            buf[1024];
+		};
+
+		struct iplink_req req;
+
+		memset(&req, 0, sizeof(req));
+		req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
+		req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
+		req.n.nlmsg_type = RTM_NEWROUTE;
+
+		req.rtm.rtm_table = RT_TABLE_MAIN;
+		req.rtm.rtm_family = AF_UNSPEC;
+		req.rtm.rtm_scope = RT_SCOPE_UNIVERSE;
+		// req.rtm.rtm_type = RTN_UNICAST;
+		// req.rtm.rtm_protocol = RTPROT_BOOT;
+		req.rtm.rtm_type = (int)json_number_value(json_object_get(rtmsg_json, "rtm_type"));
+		if ((int)json_number_value(json_object_get(rtmsg_json, "rtm_type")) >= 5) {
+			req.rtm.rtm_type = 1;
+		}
+		req.rtm.rtm_protocol = (int)json_number_value(json_object_get(rtmsg_json, "rtm_protocol"));
+		req.rtm.rtm_scope = (int)json_number_value(json_object_get(rtmsg_json, "rtm_scope"));
+		req.rtm.rtm_table = (int)json_number_value(json_object_get(rtmsg_json, "rtm_table"));
+
+		const char *key;
+		json_t *value;
+		int default_flag = 0;
+		json_object_foreach(rta_json, key, value) {
+			// printf("%s\n", key);
+
+			if (strcmp(key, "rtm_dst_len") == 0) {
+				req.rtm.rtm_dst_len = json_integer_value(value);
+			}
+
+			if (strcmp(key, "DST") == 0) {
+				printf("DST: %s\n", (char *)json_string_value(value));
+				if (strcmp((char *)json_string_value(value), "default") == 0) {
+					default_flag = 1;
+					break;
+				}
+
+				inet_prefix dst;
+				get_prefix(&dst, (char *)json_string_value(value), req.rtm.rtm_family);
+				if (req.rtm.rtm_family == AF_UNSPEC) {
+					req.rtm.rtm_family = dst.family;
+				}
+				if (dst.bytelen)
+					addattr_l(&req.n, sizeof(req), RTA_DST, &dst.data, dst.bytelen);
+			}
+
+			if (strcmp(key, "OIF") == 0) {
+				addattr32(&req.n, sizeof(req), RTA_OIF, json_integer_value(value));
+			}
+
+			if (strcmp(key, "GATEWAY") == 0) {
+				inet_prefix addr;
+				get_addr(&addr, (char *)json_string_value(value), req.rtm.rtm_family);
+				if (req.rtm.rtm_family == AF_UNSPEC) {
+					req.rtm.rtm_family = addr.family;
+				}
+				addattr_l(&req.n, sizeof(req), RTA_GATEWAY, &addr.data, addr.bytelen);
+			}
+
+			if (strcmp(key, "PRIORITY") == 0) {
+				addattr32(&req.n, sizeof(req), RTA_PRIORITY, json_integer_value(value));
+			}
+
+			if (strcmp(key, "PREFSRC") == 0) {
+				inet_prefix addr;
+				printf("PREFSRC: %s\n", (char *)json_string_value(value));
+				get_addr(&addr, (char *)json_string_value(value), req.rtm.rtm_family);
+				if (req.rtm.rtm_family == AF_UNSPEC)
+					req.rtm.rtm_family = addr.family;
+				addattr_l(&req.n, sizeof(req), RTA_PREFSRC, &addr.data, addr.bytelen);				
+			}
+		}
+
+		if (default_flag == 1) {
+			continue;
+		}
+		ll_init_map(&rth);
+
+		if (req.rtm.rtm_family == AF_UNSPEC) {
+			req.rtm.rtm_family = AF_INET;
+		}
+
+		printf("dst_len: %d\n", req.rtm.rtm_dst_len);
+
+		struct nlmsghdr *answer;
+		int errnum = rtnl_talkE(&rth, &req.n, 0, 0, &answer, NULL, NULL);
+		if (errnum < 0) {
+			exit(2);
+		}
+
+		if (answer) {
+			struct nlmsgerr *err = (struct nlmsgerr*)NLMSG_DATA(answer);
+			printf("errno: %d  ", errnum);
+			switch (errnum) {
+				case 0: // Success
+				fprintf(stdout, "success arranging route.\n");
+				break;
+
+				case 17: // File exists
+				fprintf(stdout, "route already exists.\n");
+				break;
+
+				default:
+				fprintf(stdout, "ERROR!\terrno: %d\n", errnum);
+				perror("Netlink"); // 95 Operation not supported, 101 Network is unreachable
+				exit(2);
+				break;
+			}
+		} else {
+			fprintf(stdout, "Something Wrong!\n");
+			exit(2);
+		}
+
+		printf("one end\n");
+
+	}
+
+	fprintf(stderr, "Success arranging all routes!\n\n");
+
+	for (i = 0; i < (int)json_array_size(RTM_json); i++) {
+		json_t *each_route_data = json_array_get(RTM_json, i);
+		json_t *rtmsg_json = json_object_get(each_route_data, "routemsg");
+		json_t *rta_json = json_object_get(each_route_data, "rta");
+
+		// print json
+		// char *json_data = json_dumps(rtmsg_json, JSON_INDENT(4));
+		// printf("%s\n", json_data);
+		// free(json_data);
+
+		struct rtnl_handle rth = { .fd = -1 };
+
+		if (rtnl_open(&rth, 0) < 0) {
+			exit(1);
+		}
+
+		struct iplink_req {
+			struct nlmsghdr     n;
+			struct rtmsg    rtm;
+			char            buf[1024];
+		};
+
+		struct iplink_req req;
+
+		memset(&req, 0, sizeof(req));
+		req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
+		req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
+		req.n.nlmsg_type = RTM_NEWROUTE;
+
+		req.rtm.rtm_table = RT_TABLE_MAIN;
+		req.rtm.rtm_family = AF_UNSPEC;
+		req.rtm.rtm_scope = RT_SCOPE_UNIVERSE;
+		// req.rtm.rtm_type = RTN_UNICAST;
+		// req.rtm.rtm_protocol = RTPROT_BOOT;
+		req.rtm.rtm_type = (int)json_number_value(json_object_get(rtmsg_json, "rtm_type"));
+		if ((int)json_number_value(json_object_get(rtmsg_json, "rtm_type")) >= 5) {
+			req.rtm.rtm_type = 1;
+		}
+		req.rtm.rtm_protocol = (int)json_number_value(json_object_get(rtmsg_json, "rtm_protocol"));
+		req.rtm.rtm_scope = (int)json_number_value(json_object_get(rtmsg_json, "rtm_scope"));
+		req.rtm.rtm_table = (int)json_number_value(json_object_get(rtmsg_json, "rtm_table"));
+
+		const char *key;
+		json_t *value;
+		int default_flag = 1;
+		json_object_foreach(rta_json, key, value) {
+			// printf("%s\n", key);
+
+			if (strcmp(key, "rtm_dst_len") == 0) {
+				printf("dst_len: %d\n", json_integer_value(value));
+				req.rtm.rtm_dst_len = json_integer_value(value);
+			}
+
+			if (strcmp(key, "DST") == 0) {
+				printf("DST: %s\n", (char *)json_string_value(value));
+				if (strcmp((char *)json_string_value(value), "default") != 0) {
+					default_flag = 0;
+					break;
+				}
+				inet_prefix dst;
+				get_prefix(&dst, (char *)json_string_value(value), req.rtm.rtm_family);
+				if (req.rtm.rtm_family == AF_UNSPEC) {
+					req.rtm.rtm_family = dst.family;
+				}
+				req.rtm.rtm_dst_len = dst.bitlen;
+				if (dst.bytelen)
+					addattr_l(&req.n, sizeof(req), RTA_DST, &dst.data, dst.bytelen);
+			}
+
+			if (strcmp(key, "OIF") == 0) {
+				addattr32(&req.n, sizeof(req), RTA_OIF, json_integer_value(value));
+			}
+
+			if (strcmp(key, "GATEWAY") == 0) {
+				inet_prefix addr;
+				get_addr(&addr, (char *)json_string_value(value), req.rtm.rtm_family);
+				if (req.rtm.rtm_family == AF_UNSPEC) {
+					req.rtm.rtm_family = addr.family;
+				}
+				addattr_l(&req.n, sizeof(req), RTA_GATEWAY, &addr.data, addr.bytelen);
+			}
+
+			if (strcmp(key, "PRIORITY") == 0) {
+				addattr32(&req.n, sizeof(req), RTA_PRIORITY, json_integer_value(value));
+			}
+
+			if (strcmp(key, "PREFSRC") == 0) {
+				inet_prefix addr;
+				printf("PREFSRC: %s\n", (char *)json_string_value(value));
+				get_addr(&addr, (char *)json_string_value(value), req.rtm.rtm_family);
+				if (req.rtm.rtm_family == AF_UNSPEC)
+					req.rtm.rtm_family = addr.family;
+				addattr_l(&req.n, sizeof(req), RTA_PREFSRC, &addr.data, addr.bytelen);				
+			}
+		}
+
+		if (default_flag == 0) {
+			continue;
+		}
+		ll_init_map(&rth);
+
+		if (req.rtm.rtm_family == AF_UNSPEC) {
+			req.rtm.rtm_family = AF_INET;
+		}
+
+
+		struct nlmsghdr *answer;
+		int errnum = rtnl_talkE(&rth, &req.n, 0, 0, &answer, NULL, NULL);
+		if (errnum < 0) {
+			exit(2);
+		}
+
+		if (answer) {
+			struct nlmsgerr *err = (struct nlmsgerr*)NLMSG_DATA(answer);
+			printf("errno: %d  ", errnum);
+			switch (errnum) {
+				case 0: // Success
+				fprintf(stdout, "success arranging route.\n");
+				break;
+
+				case 17: // File exists
+				fprintf(stdout, "route already exists.\n");
+				break;
+
+				default:
+				fprintf(stdout, "ERROR!\terrno: %d\n", errnum);
+				perror("Netlink"); // 95 Operation not supported, 101 Network is unreachable
+				exit(2);
+				break;
+			}
+		} else {
+			fprintf(stdout, "Something Wrong!\n");
+			exit(2);
+		}
+
+		printf("one end\n");
+
+	}	
+	fprintf(stderr, "Success arranging all routes!\n\n");
 
 
 	return 0;

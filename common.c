@@ -64,8 +64,8 @@ int rtnl_talkE(struct rtnl_handle *rtnl, struct nlmsghdr *n, pid_t peer,
 
 	n->nlmsg_seq = seq = ++rtnl->seq;
 
-	if (answer == NULL)
-		n->nlmsg_flags |= NLM_F_ACK;
+	//if (answer == NULL)
+	n->nlmsg_flags |= NLM_F_ACK;
 
 	status = sendmsg(rtnl->fd, &msg, 0);
 
