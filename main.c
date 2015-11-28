@@ -29,11 +29,17 @@ int main(int argc, char **argv) {
 			// }
 
 			json_t *address_json = json_object();
-			address_json = make_address_file(".negi/negi9.json");
+			address_json = make_address_file();
 
 			if (json_object_size(address_json) == 0) {
 				fprintf(stderr, "Error: can't make address file");
 			}
+
+			// json_t *route_json = json_object();
+			// route_json = make_route_file(".negi/negi9.json");
+			// if (make_route_file(".negi/negi5.json") < 0) {
+			// 	fprintf(stderr, "Error: can't make route file");
+			// }
 
 			// print json
 			char *json_data = json_dumps(address_json, JSON_INDENT(4));
@@ -42,10 +48,6 @@ int main(int argc, char **argv) {
 
 			make_file(".negi/negi8.json", json_data);
 
-			// json_t *route_json = json_object();
-			// if (make_route_file(".negi/negi5.json") < 0) {
-			// 	fprintf(stderr, "Error: can't make route file");
-			// }
 		}
 		else if (strcmp("revert", *argv) == 0) {
 			// read_interface_file(".negi/negi8.json");

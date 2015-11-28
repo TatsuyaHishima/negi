@@ -3,7 +3,7 @@
 
 #include <jansson.h>
 
-json_t* make_address_file(char *filename);
+json_t* make_address_file();
 int read_address_file(char *filename);
 
 #endif

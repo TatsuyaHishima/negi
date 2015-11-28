@@ -29,7 +29,7 @@ static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n, void *
 	return 0;
 }
 
-json_t* make_address_file(char *filename) {
+json_t* make_address_file() {
 	json_t *ipAddrTable_json = json_object();
 	json_t *ipAddrEntry_array = json_array();
 
@@ -266,7 +266,7 @@ int read_address_file(char* filename) {
 		req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifaddrmsg));
 		req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
 		req.ifa.ifa_index = (int)json_number_value(json_object_get(address_json, "ipAdEntIfIndex"));
-		req.ifa.ifa_prefixlen = (int)json_number_value(json_object_get(address_json, "ipAdEntNetmask"));
+		req.ifa.ifa_prefixlen = (int)json_number_value(json_object_get(address_json, "ipAdEntNetMask"));
 
 		req.ifa.ifa_flags = 0;
 		req.ifa.ifa_family = 0;
