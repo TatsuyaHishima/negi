@@ -413,14 +413,7 @@ int down_interface(int index) {
 	return 0;
 }
 
-int read_interface_file(char* filename) {
-	json_error_t error;
-	json_t *interfaces_json = json_load_file(filename , JSON_DECODE_ANY, &error);
-
-	if(!interfaces_json) {
-		fprintf(stderr, "Error: can't read json file.\n");
-		return -1;
-	}
+int read_interface_file(json_t* interfaces_json) {
 
 	// delete virtual interfaces before remake
 	delete_virtual_interface(get_max_index());

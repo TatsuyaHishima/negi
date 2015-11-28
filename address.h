@@ -4,6 +4,6 @@
 #include <jansson.h>
 
 json_t* make_address_file();
-int read_address_file(char *filename);
+int read_address_file(json_t *addresses_json);
 
 #endif

@@ -230,15 +230,7 @@ int delete_all_address() {
 	return 0;
 }
 
-int read_address_file(char* filename) {
-
-	json_error_t error;
-	json_t *addresses_json = json_load_file(filename , JSON_DECODE_ANY, &error);
-
-	if(!addresses_json) {
-		fprintf(stderr, "Error: can't read json file.\n");
-		return -1;
-	}
+int read_address_file(json_t* addresses_json) {
 
 	// 全部のアドレス情報を削除する必要あり
 	delete_all_address();

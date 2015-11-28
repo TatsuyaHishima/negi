@@ -299,15 +299,7 @@ int delete_all_route() {
 	return 0;
 }
 
-int read_route_file(char *filename) {
-
-	json_error_t error;
-	json_t *routes_json = json_load_file(filename , JSON_DECODE_ANY, &error);
-
-	if(!routes_json) {
-		fprintf(stderr, "Error: can't read json file.\n");
-		return -1;
-	}
+int read_route_file(json_t *routes_json) {
 
 	// routeの削除
 	delete_all_route();

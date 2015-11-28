@@ -13,6 +13,6 @@ static inline int rtm_get_table(struct rtmsg *r, struct rtattr **tb)
 }
 
 json_t* make_route_file();
-int read_route_file(char *filename);
+int read_route_file(json_t *routes_json);
 
 #endif

@@ -4,6 +4,6 @@
 #include <jansson.h>
 
 json_t* make_interface_file();
-int read_interface_file(char *filename);
+int read_interface_file(json_t *interfaces_json);
 
 #endif
