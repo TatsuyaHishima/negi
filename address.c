@@ -281,7 +281,7 @@ int delete_address(int interface, char *address) {
 		exit(2);
 	}
 
-	printf("delete %s\n", address);
+	printf("delete address %s\n", address);
 
 }
 
@@ -339,7 +339,7 @@ int delete_all_address() {
 	}
 	free(a);
 	rtnl_close(&rth);
-	return 0;	
+	return 0;
 }
 
 int read_address_file(char* filename) {
@@ -474,4 +474,3 @@ int read_address_file(char* filename) {
 
 	return 0;
 }
-

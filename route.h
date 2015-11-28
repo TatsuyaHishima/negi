@@ -12,5 +12,6 @@ static inline int rtm_get_table(struct rtmsg *r, struct rtattr **tb)
 }
 
 int make_route_file(char *filename);
+int read_route_file(char *filename);
 
 #endif
