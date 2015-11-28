@@ -81,8 +81,6 @@ int make_route_file(char *filename) {
 		n = r->next;
 		struct nlmsghdr *nlhdr = &(r->h);
 
-		__u32 table;
-
 		if (nlhdr->nlmsg_type != RTM_NEWROUTE && nlhdr->nlmsg_type != RTM_DELROUTE) {
 			fprintf(stderr, "Not a route: %08x %08x %08x\n", nlhdr->nlmsg_len, nlhdr->nlmsg_type, nlhdr->nlmsg_flags);
 			return 0;
@@ -115,7 +113,6 @@ int make_route_file(char *filename) {
 		// Analyze rtattr Message
 		struct rtattr *tb[RTA_MAX+1];
 		parse_rtattr(tb, RTA_MAX, RTM_RTA(rtm), len);
-		table = rtm_get_table(r, tb);
 
 		json_t *rta_json = json_object();
 
@@ -271,7 +268,6 @@ int delete_route(char *address, int netmask) {
 	}
 
 	if (answer) {
-		struct nlmsgerr *err = (struct nlmsgerr*)NLMSG_DATA(answer);
 		printf("errno: %d  ", errnum);
 		switch (errnum) {
 			case 0: // Success
@@ -284,6 +280,7 @@ int delete_route(char *address, int netmask) {
 
 			default:
 			fprintf(stderr, "ERROR!\terrno: %d\n", errnum);
+			perror("Netlink");
 			break;
 		}
 	} else {
@@ -321,7 +318,7 @@ int delete_all_route() {
 		n = r->next;
 		struct nlmsghdr *nlhdr = &(r->h);
 
-		__u32 table;
+
 
 		if (nlhdr->nlmsg_type != RTM_NEWROUTE && nlhdr->nlmsg_type != RTM_DELROUTE) {
 			fprintf(stderr, "Not a route: %08x %08x %08x\n", nlhdr->nlmsg_len, nlhdr->nlmsg_type, nlhdr->nlmsg_flags);
@@ -336,12 +333,9 @@ int delete_all_route() {
 			return -1;
 		}
 
-		int host_len = calc_host_len(rtm);
-
 		// Analyze rtattr Message
 		struct rtattr *tb[RTA_MAX+1];
 		parse_rtattr(tb, RTA_MAX, RTM_RTA(rtm), len);
-		table = rtm_get_table(r, tb);
 
 		char dst_address[64] = "";
 		char abuf[256];
@@ -498,7 +492,6 @@ int read_route_file(char *filename) {
 		}
 
 		if (answer) {
-			struct nlmsgerr *err = (struct nlmsgerr*)NLMSG_DATA(answer);
 			printf("errno: %d  ", errnum);
 			switch (errnum) {
 				case 0: // Success
@@ -575,7 +568,7 @@ int read_route_file(char *filename) {
 			// printf("%s\n", key);
 
 			if (strcmp(key, "rtm_dst_len") == 0) {
-				printf("dst_len: %d\n", json_integer_value(value));
+				printf("dst_len: %d\n", (int)json_integer_value(value));
 				req.rtm.rtm_dst_len = json_integer_value(value);
 			}
 
@@ -639,7 +632,6 @@ int read_route_file(char *filename) {
 		}
 
 		if (answer) {
-			struct nlmsgerr *err = (struct nlmsgerr*)NLMSG_DATA(answer);
 			printf("errno: %d  ", errnum);
 			switch (errnum) {
 				case 0: // Success

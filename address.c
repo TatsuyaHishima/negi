@@ -283,6 +283,7 @@ int delete_address(int interface, char *address) {
 
 	printf("delete address %s\n", address);
 
+	return 0;
 }
 
 int delete_all_address() {
@@ -442,8 +443,8 @@ int read_address_file(char* filename) {
 			}
 
 			if (strcmp(key, "prefixlen") == 0) {
-				printf("prefixlen: %d\n", json_integer_value(value));
-				req.ifa.ifa_prefixlen = json_integer_value(value);
+				printf("prefixlen: %d\n", (int)json_integer_value(value));
+				req.ifa.ifa_prefixlen = (int)json_integer_value(value);
 				prefixlen_flag = 1;
 			}
 		}
