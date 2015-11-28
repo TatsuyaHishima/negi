@@ -68,7 +68,6 @@ json_t* make_address_file() {
 		}
 
 		json_t *address_json = json_object();
-		json_t *ifaddrmsg_json = json_object();
 		json_object_set_new(address_json, "ipAdEntIfIndex", json_integer(ifamsg->ifa_index));
 		json_object_set_new(address_json, "ipAdEntNetMask", json_integer(ifamsg->ifa_prefixlen));
 
@@ -168,7 +167,7 @@ int delete_address(int interface, char *address) {
 		exit(2);
 	}
 
-	printf("delete address %s\n", address);
+	fprintf(stderr, "delete address %s\n", address);
 
 	return 0;
 }
@@ -203,13 +202,12 @@ int delete_all_address() {
 
 		// Process Data of Netlink Message as ifaddrmsg
 		if (ifamsg->ifa_family != AF_INET && ifamsg->ifa_family != AF_INET6) {
-			printf("error family: %d\n", ifamsg->ifa_family);
+			fprintf(stderr, "error family: %d\n", ifamsg->ifa_family);
 			continue;
 		}
 
 		// Analyze rtattr Message
 		int len = nlhdr->nlmsg_len - NLMSG_LENGTH(sizeof(*ifamsg));;
-		printf("%d\n", ifamsg->ifa_index);
 
 		struct rtattr *tb[IFA_MAX+1];
 		parse_rtattr(tb, IFA_MAX, IFA_RTA(ifamsg), len);
@@ -225,6 +223,7 @@ int delete_all_address() {
 		}
 		delete_address(ifamsg->ifa_index, buf);
 	}
+	fprintf(stderr, "delete all addresses.(except link local addresses)\n\n");
 	free(a);
 	rtnl_close(&rth);
 	return 0;
@@ -268,22 +267,21 @@ int read_address_file(json_t* addresses_json) {
 		inet_prefix lcl;
 		int link_local_flag = 0;
 
+		char *address_name = "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff";
 		const char *key;
 		json_t *value;
 		json_object_foreach(address_json, key, value) {
-			printf("%s\n", key);
-
 			if (strcmp(key, "ipAdEntAddr") == 0) {
 				if (link_local((char *)json_string_value(value))) {
 					link_local_flag = 1;
 					break;
 				}
-				get_prefix(&lcl, (char *)json_string_value(value), req.ifa.ifa_family);
+				address_name = (char *)json_string_value(value);
+				get_prefix(&lcl, address_name, req.ifa.ifa_family);
 				addattr_l(&req.n, sizeof(req), IFA_LOCAL, &lcl.data, lcl.bytelen);
 				addattr_l(&req.n, sizeof(req), IFA_ADDRESS, &lcl.data, lcl.bytelen);
 
 				req.ifa.ifa_family = lcl.family;
-				printf("lcl.family: %d\n",lcl.family);
 			}
 			if (strcmp(key, "ipAdEntBcastAddr") == 0) {
 				inet_prefix addr;
@@ -310,10 +308,10 @@ int read_address_file(json_t* addresses_json) {
 		if (rtnl_talk(&rth, &req.n, 0, 0, NULL, NULL, NULL) < 0) {
 			exit(2);
 		}
-		printf("one end\n");
+		fprintf(stderr, "arrange address %s/%d\n", address_name, req.ifa.ifa_prefixlen);
 
 	}
-	fprintf(stderr, "Success arranging all address!\n\n");
+	fprintf(stderr, "Success arranging all addresses!\n\n");
 
 	return 0;
 }

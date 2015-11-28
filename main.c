@@ -49,12 +49,7 @@ int main(int argc, char **argv) {
 			json_object_set_new(linux_json, "interfaces", interface_json);
 			json_object_set_new(linux_json, "ip", ip_json);
 
-			// print json
-			char *json_data = json_dumps(linux_json, JSON_INDENT(4));
-			sprintf(json_data, "%s\n", json_data); // add new line to end of file
-			printf("%s", json_data);
-
-			make_file(".negi/negi10.json", json_data);
+			make_json_file(".negi/negi10.json", linux_json);
 
 		}
 		else if (strcmp("revert", *argv) == 0) {

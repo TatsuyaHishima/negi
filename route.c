@@ -86,10 +86,6 @@ json_t* make_route_file() {
 			return 0;
 		}
 
-		// printf("\n== ROUTE INFO ==\n");
-		// printf("len: %d\n", nlhdr->nlmsg_len);
-		// printf("type: %d\n", nlhdr->nlmsg_type);
-
 		struct rtmsg *rtm = NLMSG_DATA(nlhdr);
 		int	len = nlhdr->nlmsg_len - NLMSG_LENGTH(sizeof(struct rtmsg));
 
@@ -105,7 +101,7 @@ json_t* make_route_file() {
 
 		if (len < 0) {
 			fprintf(stderr, "BUG: wrong nlmsg len %d\n", len);
-			return -1;
+			exit(2);
 		}
 
 		int host_len = calc_host_len(rtm);
@@ -203,19 +199,19 @@ int delete_route(char *address, int netmask) {
 	}
 
 	if (answer) {
-		printf("errno: %d  ", errnum);
 		switch (errnum) {
 			case 0: // Success
 			fprintf(stderr, "delete route to %s\n", address);
 			break;
 
 			case 3: // No such device
-			fprintf(stderr, "already deleted.\n");
+			// fprintf(stderr, "already deleted.\n");
 			break;
 
 			default:
 			fprintf(stderr, "ERROR!\terrno: %d\n", errnum);
 			perror("Netlink");
+			exit(2);
 			break;
 		}
 	} else {
@@ -274,37 +270,34 @@ int delete_all_route() {
 
 		char dst_address[64] = "";
 		char abuf[256];
+		int host_len = calc_host_len(rtm);
 
 		if (tb[RTA_DST]) {
-			// if (rtm->rtm_dst_len != host_len) {
-			sprintf(dst_address, "%s/%d", rt_addr_n2a(rtm->rtm_family, RTA_PAYLOAD(tb[RTA_DST]), RTA_DATA(tb[RTA_DST]), abuf, sizeof(abuf)), rtm->rtm_dst_len);
-			// } else {
-				// sprintf(dst_address, "%s", format_host(rtm->rtm_family,	RTA_PAYLOAD(tb[RTA_DST]), RTA_DATA(tb[RTA_DST]), abuf, sizeof(abuf)));
-
-			// }
+			if (rtm->rtm_dst_len != host_len) {
+				sprintf(dst_address, "%s/%d", rt_addr_n2a(rtm->rtm_family, RTA_PAYLOAD(tb[RTA_DST]), RTA_DATA(tb[RTA_DST]), abuf, sizeof(abuf)), rtm->rtm_dst_len);
+			} else {
+				sprintf(dst_address, "%s", format_host(rtm->rtm_family,	RTA_PAYLOAD(tb[RTA_DST]), RTA_DATA(tb[RTA_DST]), abuf, sizeof(abuf)));
+			}
 		} else if (rtm->rtm_dst_len) {
 			sprintf(dst_address, "0/%d", rtm->rtm_dst_len);
 		} else {
 			sprintf(dst_address, "default");
 		}
-		// printf("%s:%d\n", dst_address, rtm->rtm_dst_len);
+
 		if (strncmp(dst_address, "127.0.0.0", 9) != 0 && strcmp(dst_address, "ff00::") != 0) {
 			delete_route((char *)dst_address, rtm->rtm_dst_len);
 		}
 	}
 
-	printf("delete all routes.\n");
+	printf("delete all routes.\n\n");
 	free(r);
 	rtnl_close(&rth);
 	return 0;
 }
 
-int read_route_file(json_t *routes_json) {
-
-	// routeの削除
-	delete_all_route();
-
-	json_t *ipRouteEntry_json = json_object_get(routes_json, "ipRouteEntry");
+// default_flagが0ならDSTがdefault以外の経路をrtnl_talkする
+// default_flagが1ならDSTがdefaultの経路だけをrtnl_talkする
+void modify_route(json_t *ipRouteEntry_json, int default_flag) {
 	int i;
 	for (i = 0; i < (int)json_array_size(ipRouteEntry_json); i++) {
 		json_t *route_json = json_array_get(ipRouteEntry_json, i);
@@ -317,23 +310,17 @@ int read_route_file(json_t *routes_json) {
 		}
 
 		struct iplink_req {
-			struct nlmsghdr     n;
-			struct rtmsg    rtm;
-			char            buf[1024];
-		};
-
-		struct iplink_req req;
+			struct nlmsghdr n;
+			struct rtmsg rtm;
+			char buf[1024];
+		} req;
 
 		memset(&req, 0, sizeof(req));
 		req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
 		req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
 		req.n.nlmsg_type = RTM_NEWROUTE;
 
-		req.rtm.rtm_table = RT_TABLE_MAIN;
 		req.rtm.rtm_family = AF_UNSPEC;
-		req.rtm.rtm_scope = RT_SCOPE_UNIVERSE;
-		// req.rtm.rtm_type = RTN_UNICAST;
-		// req.rtm.rtm_protocol = RTPROT_BOOT;
 		req.rtm.rtm_type = (int)json_number_value(json_object_get(route_json, "ipRouteType"));
 		if (req.rtm.rtm_type >= 5) {
 			req.rtm.rtm_type = 1;
@@ -343,19 +330,27 @@ int read_route_file(json_t *routes_json) {
 		req.rtm.rtm_table = (int)json_number_value(json_object_get(linux_json, "rtm_table"));
 		req.rtm.rtm_dst_len = (int)json_number_value(json_object_get(route_json, "ipRouteMask"));
 
+		char *route_name = "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff";
 		const char *key;
 		json_t *value;
-		int default_flag = 0;
+		int skip_flag = 0;
 		json_object_foreach(route_json, key, value) {
 
 			if (strcmp(key, "ipRouteDest") == 0) {
-				if (strcmp((char *)json_string_value(value), "default") == 0) {
-					default_flag = 1;
+				// DSTがdefaultでdefaultをスキップする時
+				if (strcmp((char *)json_string_value(value), "default") == 0 && default_flag == 0) {
+					skip_flag = 1;
+					break;
+				}
+				// DSTがdefaultでなく、default以外をスキップする時
+				else if (strcmp((char *)json_string_value(value), "default") != 0 && default_flag == 1) {
+					skip_flag = 1;
 					break;
 				}
 
 				inet_prefix dst;
-				get_prefix(&dst, (char *)json_string_value(value), req.rtm.rtm_family);
+				route_name = (char *)json_string_value(value);
+				get_prefix(&dst, route_name, req.rtm.rtm_family);
 				if (req.rtm.rtm_family == AF_UNSPEC) {
 					req.rtm.rtm_family = dst.family;
 				}
@@ -389,7 +384,7 @@ int read_route_file(json_t *routes_json) {
 			}
 		}
 
-		if (default_flag == 1) {
+		if (skip_flag == 1) {
 			continue;
 		}
 		ll_init_map(&rth);
@@ -405,19 +400,18 @@ int read_route_file(json_t *routes_json) {
 		}
 
 		if (answer) {
-			printf("errno: %d  ", errnum);
 			switch (errnum) {
 				case 0: // Success
-				fprintf(stderr, "success arranging route.\n");
+				fprintf(stderr, "arrange route to %s/%d\n", route_name, req.rtm.rtm_dst_len);
 				break;
 
 				case 17: // File exists
-				fprintf(stderr, "route already exists.\n");
+				// fprintf(stderr, "route already exists.\n");
 				break;
 
 				default:
 				fprintf(stderr, "ERROR!\terrno: %d\n", errnum);
-				perror("Netlink"); // 95 Operation not supported, 101 Network is unreachable
+				perror("Netlink");
 				exit(2);
 				break;
 			}
@@ -425,139 +419,21 @@ int read_route_file(json_t *routes_json) {
 			fprintf(stderr, "Something Wrong!\n");
 			exit(2);
 		}
-
-		printf("one end\n");
-
 	}
+}
 
+int read_route_file(json_t *routes_json) {
+
+	// routeの削除
+	delete_all_route();
+
+	json_t *ipRouteEntry_json = json_object_get(routes_json, "ipRouteEntry");
+
+	// defaultへの経路はGatewayへの経路が登録されてからでないとnetwork is unreachableになるので
+	// defaultへの経路とそうでないものを分ける
+	modify_route(ipRouteEntry_json, 0);
+	modify_route(ipRouteEntry_json, 1);
 	fprintf(stderr, "Success arranging all routes!\n\n");
-
-	for (i = 0; i < (int)json_array_size(ipRouteEntry_json); i++) {
-		json_t *route_json = json_array_get(ipRouteEntry_json, i);
-		json_t *linux_json = json_object_get(ipRouteEntry_json, "linux");
-
-		struct rtnl_handle rth = { .fd = -1 };
-
-		if (rtnl_open(&rth, 0) < 0) {
-			exit(1);
-		}
-
-		struct iplink_req {
-			struct nlmsghdr     n;
-			struct rtmsg    rtm;
-			char            buf[1024];
-		};
-
-		struct iplink_req req;
-
-		memset(&req, 0, sizeof(req));
-		req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
-		req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
-		req.n.nlmsg_type = RTM_NEWROUTE;
-
-		req.rtm.rtm_table = RT_TABLE_MAIN;
-		req.rtm.rtm_family = AF_UNSPEC;
-		req.rtm.rtm_scope = RT_SCOPE_UNIVERSE;
-		// req.rtm.rtm_type = RTN_UNICAST;
-		// req.rtm.rtm_protocol = RTPROT_BOOT;
-		req.rtm.rtm_type = (int)json_number_value(json_object_get(route_json, "ipRouteType"));
-		if (req.rtm.rtm_type >= 5) {
-			req.rtm.rtm_type = 1;
-		}
-		req.rtm.rtm_protocol = (int)json_number_value(json_object_get(route_json, "ipRouteProto"));
-		req.rtm.rtm_scope = (int)json_number_value(json_object_get(linux_json, "rtm_scope"));
-		req.rtm.rtm_table = (int)json_number_value(json_object_get(linux_json, "rtm_table"));
-		req.rtm.rtm_dst_len = (int)json_number_value(json_object_get(route_json, "ipRouteMask"));
-
-		const char *key;
-		json_t *value;
-		int default_flag = 1;
-		json_object_foreach(route_json, key, value) {
-
-			if (strcmp(key, "ipRouteDest") == 0) {
-				if (strcmp((char *)json_string_value(value), "default") != 0) {
-					default_flag = 0;
-					break;
-				}
-
-				inet_prefix dst;
-				get_prefix(&dst, (char *)json_string_value(value), req.rtm.rtm_family);
-				if (req.rtm.rtm_family == AF_UNSPEC) {
-					req.rtm.rtm_family = dst.family;
-				}
-				if (dst.bytelen)
-					addattr_l(&req.n, sizeof(req), RTA_DST, &dst.data, dst.bytelen);
-			}
-
-			if (strcmp(key, "ipRouteIfIndex") == 0) {
-				addattr32(&req.n, sizeof(req), RTA_OIF, json_integer_value(value));
-			}
-
-			if (strcmp(key, "ipRouteNextHop") == 0) {
-				inet_prefix addr;
-				get_addr(&addr, (char *)json_string_value(value), req.rtm.rtm_family);
-				if (req.rtm.rtm_family == AF_UNSPEC) {
-					req.rtm.rtm_family = addr.family;
-				}
-				addattr_l(&req.n, sizeof(req), RTA_GATEWAY, &addr.data, addr.bytelen);
-			}
-
-			if (strcmp(key, "ipRouteMetric1") == 0) {
-				addattr32(&req.n, sizeof(req), RTA_PRIORITY, json_integer_value(value));
-			}
-
-			if (strcmp(key, "ipRouteInfo") == 0) {
-				inet_prefix addr;
-				get_addr(&addr, (char *)json_string_value(value), req.rtm.rtm_family);
-				if (req.rtm.rtm_family == AF_UNSPEC)
-					req.rtm.rtm_family = addr.family;
-				addattr_l(&req.n, sizeof(req), RTA_PREFSRC, &addr.data, addr.bytelen);				
-			}
-		}
-
-		if (default_flag == 0) {
-			continue;
-		}
-		ll_init_map(&rth);
-
-		if (req.rtm.rtm_family == AF_UNSPEC) {
-			req.rtm.rtm_family = AF_INET;
-		}
-
-		struct nlmsghdr *answer;
-		int errnum = rtnl_talkE(&rth, &req.n, 0, 0, &answer, NULL, NULL);
-		if (errnum < 0) {
-			exit(2);
-		}
-
-		if (answer) {
-			printf("errno: %d  ", errnum);
-			switch (errnum) {
-				case 0: // Success
-				fprintf(stderr, "success arranging route.\n");
-				break;
-
-				case 17: // File exists
-				fprintf(stderr, "route already exists.\n");
-				break;
-
-				default:
-				fprintf(stderr, "ERROR!\terrno: %d\n", errnum);
-				perror("Netlink"); // 95 Operation not supported, 101 Network is unreachable
-				exit(2);
-				break;
-			}
-		} else {
-			fprintf(stderr, "Something Wrong!\n");
-			exit(2);
-		}
-
-		printf("one end\n");
-
-	}
-
-	fprintf(stderr, "Success arranging all routes!\n\n");
-
 
 	return 0;
 }
