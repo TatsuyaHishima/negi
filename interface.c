@@ -82,8 +82,8 @@ json_t* make_interface_file() {
 		json_t *linux_json = json_object();
 
 		json_object_set_new(interface_json, "ifIndex", json_integer(ifimsg->ifi_index));
-		json_object_set_new(linux_json, "ifinfo_type", json_integer(ifimsg->ifi_type));
-		json_object_set_new(linux_json, "ifinfo_flags", json_integer(ifimsg->ifi_flags));
+		json_object_set_new(linux_json, "ifi_type", json_integer(ifimsg->ifi_type));
+		json_object_set_new(linux_json, "ifi_flags", json_integer(ifimsg->ifi_flags));
 
 		// Analyze rtattr Message
 		int len = nlhdr->nlmsg_len - NLMSG_LENGTH(sizeof(*ifimsg));;
@@ -452,8 +452,8 @@ int read_interface_file(char* filename) {
 		req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL;
 		req.ifi.ifi_index = (int)json_number_value(json_object_get(interface_json, "ifIndex"));
 		req.ifi.ifi_change =  0xFFFFFFFF;
-		req.ifi.ifi_type = 0;
-		req.ifi.ifi_flags = (unsigned int)json_number_value(json_object_get(linux_json, "ifinfo_flags"));
+		req.ifi.ifi_type = (unsigned short)json_number_value(json_object_get(linux_json, "ifi_type"));//0;
+		req.ifi.ifi_flags = (unsigned int)json_number_value(json_object_get(linux_json, "ifi_flags"));
 
 		int real_or_virtual = interface_real_or_virtual(interface_json);
 

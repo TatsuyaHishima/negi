@@ -2,6 +2,7 @@
 #define _ROUTE_H_
 
 #include "lib/iproute/libnetlink.h"
+#include <jansson.h>
 
 static inline int rtm_get_table(struct rtmsg *r, struct rtattr **tb)
 {
@@ -11,7 +12,7 @@ static inline int rtm_get_table(struct rtmsg *r, struct rtattr **tb)
 	return table;
 }
 
-int make_route_file(char *filename);
+json_t* make_route_file();
 int read_route_file(char *filename);
 
 #endif
