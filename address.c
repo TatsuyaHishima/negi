@@ -10,6 +10,12 @@
 #include "address.h"
 #include "lib/utils.h"
 
+struct iplink_req {
+	struct nlmsghdr n;
+	struct ifaddrmsg ifa;
+	char buf[256];
+};
+
 static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 {
 	struct nlmsg_list **linfo = (struct nlmsg_list**)arg;
@@ -76,37 +82,14 @@ json_t* make_address_file() {
 
 		struct rtattr *tb[IFA_MAX+1];
 		parse_rtattr(tb, IFA_MAX, IFA_RTA(ifamsg), len);
+		char abuf[256];
 
 		if (tb[IFA_ADDRESS]) {
-			unsigned char *a = RTA_DATA(tb[IFA_ADDRESS]);
-			char buf[64];
-			if (ifamsg->ifa_family == AF_INET) {
-				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
-				json_object_set_new(address_json, "ipAdEntAddr", json_string(buf));
-				// printf("ADDRESS -> %d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
-
-			}
-			else if (ifamsg->ifa_family == AF_INET6) {
-				inet_ntop(AF_INET6, a, buf, sizeof(buf));
-				json_object_set_new(address_json, "ipAdEntAddr", json_string(buf));
-				// printf("ADDRESS -> %s\n", buf);
-			}
+			json_object_set_new(address_json, "ipAdEntAddr", json_string(rt_addr_n2a(ifamsg->ifa_family, RTA_PAYLOAD(tb[IFA_ADDRESS]), RTA_DATA(tb[IFA_ADDRESS]), abuf, sizeof(abuf))));
 		}
 
 		if (tb[IFA_BROADCAST]) {
-			unsigned char *a = RTA_DATA(tb[IFA_BROADCAST]);
-			char buf[64];
-			if (ifamsg->ifa_family == AF_INET) {
-				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
-				json_object_set_new(address_json, "ipAdEntBcastAddr", json_string(buf));
-				// printf("BROADCAST ->%d.%d.%d.%d\n", a[0], a[1], a[2], a[3]);
-
-			}
-			else if (ifamsg->ifa_family == AF_INET6) {
-				inet_ntop(AF_INET6, a, buf, sizeof(buf));
-				json_object_set_new(address_json, "ipAdEntBcastAddr", json_string(buf));
-				// printf("BROADCAST -> %s\n", buf);
-			}
+			json_object_set_new(address_json, "ipAdEntBcastAddr", json_string(rt_addr_n2a(ifamsg->ifa_family, RTA_PAYLOAD(tb[IFA_BROADCAST]), RTA_DATA(tb[IFA_BROADCAST]), abuf, sizeof(abuf))));
 		}
 
 		json_array_append(ipAddrEntry_array, address_json);
@@ -138,12 +121,6 @@ int delete_address(int interface, char *address) {
 	if (rtnl_open(&rth, 0) < 0) {
 		exit(1);
 	}
-
-	struct iplink_req {
-		struct nlmsghdr     n;
-		struct ifaddrmsg    ifa;
-		char            buf[256];
-	};
 
 	struct iplink_req req;
 
@@ -179,9 +156,7 @@ int delete_all_address() {
 		exit(1);
 	}
 
-	int preferred_family = AF_PACKET;
-
-	if (rtnl_wilddump_request(&rth, preferred_family, RTM_GETADDR) < 0) {
+	if (rtnl_wilddump_request(&rth, AF_PACKET, RTM_GETADDR) < 0) {
 		perror("Cannot send dump request\n");
 		exit(1);
 	}
@@ -212,14 +187,9 @@ int delete_all_address() {
 		struct rtattr *tb[IFA_MAX+1];
 		parse_rtattr(tb, IFA_MAX, IFA_RTA(ifamsg), len);
 		char buf[64] = "";
+		char abuf[256];
 		if (tb[IFA_ADDRESS]) {
-			unsigned char *a = RTA_DATA(tb[IFA_ADDRESS]);
-			if (ifamsg->ifa_family == AF_INET) {
-				sprintf(buf, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
-			}
-			else if (ifamsg->ifa_family == AF_INET6) {
-				inet_ntop(AF_INET6, a, buf, sizeof(buf));
-			}
+			sprintf(buf, "%s", rt_addr_n2a(ifamsg->ifa_family, RTA_PAYLOAD(tb[IFA_ADDRESS]), RTA_DATA(tb[IFA_ADDRESS]), abuf, sizeof(abuf)));
 		}
 		delete_address(ifamsg->ifa_index, buf);
 	}
@@ -229,12 +199,7 @@ int delete_all_address() {
 	return 0;
 }
 
-int read_address_file(json_t* addresses_json) {
-
-	// 全部のアドレス情報を削除する必要あり
-	delete_all_address();
-
-	json_t *ipAddrEntry_json = json_object_get(addresses_json, "ipAddrEntry");
+void modify_address(json_t *ipAddrEntry_json) {
 	int i;
 	for (i = 0; i < (int)json_array_size(ipAddrEntry_json); i++) {
 		json_t *address_json = json_array_get(ipAddrEntry_json, i);
@@ -244,12 +209,6 @@ int read_address_file(json_t* addresses_json) {
 		if (rtnl_open(&rth, 0) < 0) {
 			exit(1);
 		}
-
-		struct iplink_req {
-			struct nlmsghdr     n;
-			struct ifaddrmsg    ifa;
-			char            buf[256];
-		};
 
 		struct iplink_req req;
 
@@ -264,33 +223,33 @@ int read_address_file(json_t* addresses_json) {
 		req.ifa.ifa_scope = 0;
 		req.n.nlmsg_type = RTM_NEWADDR;
 
-		inet_prefix lcl;
+		inet_prefix addr;
 		int link_local_flag = 0;
-
 		char *address_name = "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff";
+
 		const char *key;
 		json_t *value;
 		json_object_foreach(address_json, key, value) {
 			if (strcmp(key, "ipAdEntAddr") == 0) {
+				// if link_local -> skip
 				if (link_local((char *)json_string_value(value))) {
 					link_local_flag = 1;
 					break;
 				}
-				address_name = (char *)json_string_value(value);
-				get_prefix(&lcl, address_name, req.ifa.ifa_family);
-				addattr_l(&req.n, sizeof(req), IFA_LOCAL, &lcl.data, lcl.bytelen);
-				addattr_l(&req.n, sizeof(req), IFA_ADDRESS, &lcl.data, lcl.bytelen);
 
-				req.ifa.ifa_family = lcl.family;
+				address_name = (char *)json_string_value(value);
+				get_prefix(&addr, address_name, req.ifa.ifa_family);
+				addattr_l(&req.n, sizeof(req), IFA_LOCAL, &addr.data, addr.bytelen);
+				addattr_l(&req.n, sizeof(req), IFA_ADDRESS, &addr.data, addr.bytelen);
+
+				req.ifa.ifa_family = addr.family;
 			}
 			if (strcmp(key, "ipAdEntBcastAddr") == 0) {
-				inet_prefix addr;
 				get_addr(&addr, (char *)json_string_value(value), req.ifa.ifa_family);
 				if (req.ifa.ifa_family == AF_UNSPEC)
 					req.ifa.ifa_family = addr.family;
 				addattr_l(&req.n, sizeof(req), IFA_BROADCAST, &addr.data, addr.bytelen);
 			}
-
 		}
 
 		if (link_local_flag) {
@@ -309,9 +268,17 @@ int read_address_file(json_t* addresses_json) {
 			exit(2);
 		}
 		fprintf(stderr, "arrange address %s/%d\n", address_name, req.ifa.ifa_prefixlen);
-
-	}
+	}	
 	fprintf(stderr, "Success arranging all addresses!\n\n");
+}
+
+int read_address_file(json_t* addresses_json) {
+
+	// 全部のアドレス情報を削除する必要あり
+	delete_all_address();
+
+	json_t *ipAddrEntry_json = json_object_get(addresses_json, "ipAddrEntry");
+	modify_address(ipAddrEntry_json);
 
 	return 0;
 }

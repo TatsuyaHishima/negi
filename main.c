@@ -66,6 +66,7 @@ int main(int argc, char **argv) {
 			read_interface_file(interface_json);
 
 			json_t *ip_json = json_object_get(linux_json, "ip");
+			
 			json_t *address_json = json_object_get(ip_json, "ipAddrTable");
 			read_address_file(address_json);
 

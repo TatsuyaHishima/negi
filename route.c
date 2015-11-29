@@ -18,6 +18,12 @@
 #include "route.h"
 #include "lib/utils.h"
 
+struct iplink_req {
+	struct nlmsghdr n;
+	struct rtmsg rtm;
+	char buf[1024];
+};
+
 static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 {
 	struct nlmsg_list **linfo = (struct nlmsg_list**)arg;
@@ -61,9 +67,7 @@ json_t* make_route_file() {
 		exit(1);
 	}
 
-	int preferred_family = AF_PACKET;
-
-	if (rtnl_wilddump_request(&rth, preferred_family, RTM_GETROUTE) < 0) {
+	if (rtnl_wilddump_request(&rth, AF_PACKET, RTM_GETROUTE) < 0) {
 		perror("Cannot send dump request");
 		exit(1);
 	}
@@ -159,20 +163,13 @@ int delete_route(char *address, int netmask) {
 		exit(1);
 	}
 
-	struct iplink_req {
-		struct nlmsghdr     n;
-		struct rtmsg    rtm;
-		char            buf[1024];
-	};
-
 	struct iplink_req req;
-	int preferred_family = AF_UNSPEC;
 
 	memset(&req, 0, sizeof(req));
 	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
 	req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
 	req.n.nlmsg_type = RTM_DELROUTE;
-	req.rtm.rtm_family = preferred_family;
+	req.rtm.rtm_family = AF_UNSPEC;
 	req.rtm.rtm_table = RT_TABLE_MAIN;
 	req.rtm.rtm_scope = RT_SCOPE_NOWHERE;
 
@@ -249,8 +246,6 @@ int delete_all_route() {
 		n = r->next;
 		struct nlmsghdr *nlhdr = &(r->h);
 
-
-
 		if (nlhdr->nlmsg_type != RTM_NEWROUTE && nlhdr->nlmsg_type != RTM_DELROUTE) {
 			fprintf(stderr, "Not a route: %08x %08x %08x\n", nlhdr->nlmsg_len, nlhdr->nlmsg_type, nlhdr->nlmsg_flags);
 			return 0;
@@ -309,11 +304,7 @@ void modify_route(json_t *ipRouteEntry_json, int default_flag) {
 			exit(1);
 		}
 
-		struct iplink_req {
-			struct nlmsghdr n;
-			struct rtmsg rtm;
-			char buf[1024];
-		} req;
+		struct iplink_req req;
 
 		memset(&req, 0, sizeof(req));
 		req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
@@ -322,7 +313,7 @@ void modify_route(json_t *ipRouteEntry_json, int default_flag) {
 
 		req.rtm.rtm_family = AF_UNSPEC;
 		req.rtm.rtm_type = (int)json_number_value(json_object_get(route_json, "ipRouteType"));
-		if (req.rtm.rtm_type >= 5) {
+		if (req.rtm.rtm_type >= 5) { // 5以降は定義されていない
 			req.rtm.rtm_type = 1;
 		}
 		req.rtm.rtm_protocol = (int)json_number_value(json_object_get(route_json, "ipRouteProto"));

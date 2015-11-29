@@ -10,12 +10,13 @@
 
 #include "common.h"
 #include "interface.h"
+#include "lib/rt_names.h"
 
 #define IFLIST_REPLY_BUFFER 8096
 
 struct iplink_req {
 	struct nlmsghdr n;
-	struct ifinfomsg i;
+	struct ifinfomsg ifi;
 	char buf[1024];
 };
 
@@ -49,9 +50,7 @@ json_t* make_interface_file() {
 		exit(1);
 	}
 
-	int preferred_family = AF_PACKET;
-
-	if (rtnl_wilddump_request(&rth, preferred_family, RTM_GETLINK) < 0) {
+	if (rtnl_wilddump_request(&rth, AF_PACKET, RTM_GETLINK) < 0) {
 		perror("Cannot send dump request");
 		exit(1);
 	}
@@ -68,7 +67,6 @@ json_t* make_interface_file() {
 	for (l = linfo; l; l = n) {
 		n = l->next;
 		struct nlmsghdr *nlhdr = &(l->h);
-
 		struct ifinfomsg *ifimsg = NLMSG_DATA(nlhdr);
 
 		// Process Data of Netlink Message as ifinfomsg
@@ -119,15 +117,8 @@ json_t* make_interface_file() {
 		}
 
 		if (tb[IFLA_ADDRESS]) {
-			unsigned char *a = RTA_DATA(tb[IFLA_ADDRESS]);
-
-			if (RTA_PAYLOAD(tb[IFLA_ADDRESS]) == 6) {
-				char buf[64];
-				sprintf(buf, "%.2x:%.2x:%.2x:%.2x:%.2x:%.2x", a[0], a[1], a[2], a[3], a[4], a[5]);
-				json_object_set_new(interface_json, "ifPhysAddress", json_string(buf));
-				// printf("		+ %s: %.2x:%.2x:%.2x:%.2x:%.2x:%.2x\n", "ADDRESS", a[0], a[1], a[2], a[3], a[4], a[5]);
-
-			}
+			char abuf[64];
+			json_object_set_new(interface_json, "ifPhysAddress", json_string(ll_addr_n2a(RTA_DATA(tb[IFLA_ADDRESS]), RTA_PAYLOAD(tb[IFLA_ADDRESS]), ifimsg->ifi_type, abuf, sizeof(abuf))));
 		}
 
 		json_object_set_new(interface_json, "linux", linux_json);
@@ -227,9 +218,7 @@ int get_max_index() {
 		exit(1);
 	}
 
-	int preferred_family = AF_UNSPEC;
-
-	if (rtnl_wilddump_request(&rth, preferred_family, RTM_GETLINK) < 0) {
+	if (rtnl_wilddump_request(&rth, AF_UNSPEC, RTM_GETLINK) < 0) {
 		perror("Cannot send dump request");
 		exit(1);
 	}
@@ -257,7 +246,6 @@ int get_max_index() {
 		if (ifimsg->ifi_index > max) {
 			max = ifimsg->ifi_index;
 		}
-
 	}
 	rtnl_close(&rth);
 
@@ -383,12 +371,6 @@ int interface_real_or_virtual(json_t *interface_json) {
 
 int down_interface(int index) {
 
-	struct iplink_req {
-		struct nlmsghdr     n;
-		struct ifinfomsg    ifi;
-		char            buf[1024];
-	};
-
 	struct rtnl_handle rth = { .fd = -1 };
 
 	if (rtnl_open(&rth, 0) < 0) {
@@ -431,12 +413,6 @@ int read_interface_file(json_t* interfaces_json) {
 			exit(1);
 		}
 
-		struct iplink_req {
-			struct nlmsghdr     n;
-			struct ifinfomsg    ifi;
-			char            buf[1024];
-		};
-
 		struct iplink_req req;
 
 		memset(&req, 0, sizeof(req));
@@ -464,6 +440,7 @@ int read_interface_file(json_t* interfaces_json) {
 		char *interface_name = NULL;
 		const char *key;
 		json_t *value;
+		char abuf[32];
 		json_object_foreach(interface_json, key, value) {
 
 			if (strcmp(key, "ifDscr") == 0) {
@@ -507,33 +484,11 @@ int read_interface_file(json_t* interfaces_json) {
 				if (real_or_virtual == 1) {
 					continue;
 				}
-
-				char abuf[32];
-				char *arg = (char *)json_string_value(value);
-				int i;
-
-				for (i = 0; i < (int)sizeof(abuf); i++) {
-					int temp;
-					char *cp = strchr(arg, ':');
-					if (cp) {
-						*cp = 0;
-						cp++;
-					}
-					if (sscanf(arg, "%x", &temp) != 1) {
-						fprintf(stderr, "\"%s\" is invalid lladdr.\n", arg);
-						return -1;
-					}
-					if (temp < 0 || temp > 255) {
-						fprintf(stderr, "\"%s\" is invalid lladdr.\n", arg);
-						return -1;
-					}
-					abuf[i] = temp;
-					if (!cp)
-						break;
-					arg = cp;
+				int len = ll_addr_a2n(abuf, sizeof(abuf), (char *)json_string_value(value));
+				if (len < 0) {
+					return -1;
 				}
-
-				addattr_l(&req.n, sizeof(req), IFLA_ADDRESS, abuf, i+1);
+				addattr_l(&req.n, sizeof(req), IFLA_ADDRESS, abuf, len);
 			}
 		}
 		if (real_or_virtual == 1) {
