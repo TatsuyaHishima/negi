@@ -19,7 +19,7 @@
 #include "common.h"
 
 
-int make_file(char *filename, char *string) {
+int make_json_file(char *filename, json_t *json) {
 	FILE *fp;
 
 	fp = fopen( filename, "w" );
@@ -28,7 +28,11 @@ int make_file(char *filename, char *string) {
 		return -1;
 	}
 
-	fputs(string, fp);
+	// print json
+	char *json_data = json_dumps(json, JSON_INDENT(4));
+	sprintf(json_data, "%s\n", json_data); // add new line to end of file
+
+	fputs(json_data, fp);
 
 	fclose(fp);
 
