@@ -159,16 +159,21 @@ case ${argv[$i-1]} in
          machine_type=`echo ${line} | cut -d ',' -f 2`
          machine_os=`echo ${line} | cut -d ',' -f 3`
 
-        #  echo "name: ${machine_name}"
-        #  echo "type: ${machine_type}"
-        #  echo "os: ${machine_os}"
-        #  echo "----行終わりっ！-------"
-        #
-         case ${machine_os} in
-            linux)
+         #  echo "name: ${machine_name}"
+         #  echo "type: ${machine_type}"
+         #  echo "os: ${machine_os}"
+         #  echo "----行終わりっ！-------"
+         #
+         csvfile="${CurrentDir}/.negi/config.csv"
+         for config_line in `cat "${csvfile}" | grep -v ^#`
+         do
+            config_os=`echo ${config_line} | cut -d ',' -f 1`
+            config_commit=`echo ${config_line} | cut -d ',' -f 2`
+
+            if [ ${config_os} = ${machine_os} ]; then
                case ${machine_type} in
                   master)
-                     "${CurrentDir}/linux/negi_linux_commit" "${commit_file_path}" "${machine_name}"
+                     "${CurrentDir}/${config_commit}" "${commit_file_path}" "${machine_name}"
                   ;;
                   vm)
                   ;;
@@ -177,13 +182,10 @@ case ${argv[$i-1]} in
                   *)
                   ;;
                esac
-            ;;
-
-            *)
+            else
                echo "skip ${machine_name}"
-            ;;
-
-         esac
+            fi
+         done
       done
 
 
@@ -191,61 +193,61 @@ case ${argv[$i-1]} in
    ;;
 
    config)
-   i=`expr $i + 1`
+      i=`expr $i + 1`
 
-   case ${argv[$i-1]} in
-     add)
-      printf "What is OS name? [Default: linux] "
-      os=`getInfo "linux"`
+      case ${argv[$i-1]} in
+         add)
+            printf "What is OS name? [Default: linux] "
+            os=`getInfo "linux"`
 
-      printf "What is the commit script name? [Default: negi_linux] "
-      commit=`getInfo "negi_linux"`
+            printf "What is the commit script name? [Default: negi_linux] "
+            commit=`getInfo "negi_linux"`
 
-      printf "What is the revert script name? [Default: negi_linux] "
-      revert=`getInfo "negi_linux"`
+            printf "What is the revert script name? [Default: negi_linux] "
+            revert=`getInfo "negi_linux"`
 
-      echo "${os},${commit},${revert}" >> "${CurrentDir}/.negi/config.csv"
-     ;;
-     del)
-     printf "What is OS name?"
-     os=`getInfo ""`
+            echo "${os},${commit},${revert}" >> "${CurrentDir}/.negi/config.csv"
+         ;;
+         del)
+            printf "What is OS name?"
+            os=`getInfo ""`
 
-     if [ ! -n "${os}" ]; then
-        echo "Type OS name."
-        exit
-     fi
+            if [ ! -n "${os}" ]; then
+               echo "Type OS name."
+               exit
+            fi
 
-     # config.csvからデータの読み込み
-     csvfile="${CurrentDir}/.negi/config.csv"
-     lineNum=1
-     for line in `cat "${csvfile}" | grep -v ^#`
-     do
-        lineNum=`expr $lineNum + 1`
-        os_name=`echo ${line} | cut -d ',' -f 1`
-        if [ ${os} = ${os_name} ]; then
-           sed -e "${lineNum}d" "${csvfile}" > "${csvfile}.tmp"
-           mv "${csvfile}.tmp" "${csvfile}"
-           exit
-        fi
-     done
-     echo "There is no such OS."
-     ;;
+            # config.csvからデータの読み込み
+            csvfile="${CurrentDir}/.negi/config.csv"
+            lineNum=1
+            for line in `cat "${csvfile}" | grep -v ^#`
+            do
+               lineNum=`expr $lineNum + 1`
+               os_name=`echo ${line} | cut -d ',' -f 1`
+               if [ ${os} = ${os_name} ]; then
+                  sed -e "${lineNum}d" "${csvfile}" > "${csvfile}.tmp"
+                  mv "${csvfile}.tmp" "${csvfile}"
+                  exit
+               fi
+            done
+            echo "There is no such OS."
+         ;;
 
-     *)
-     # config.csvからデータの読み込み
-     csvfile="${CurrentDir}/.negi/config.csv"
-     printf "OS\tcommit\trevert\n"
-     for line in `cat "${csvfile}" | grep -v ^#`
-     do
-        os=`echo ${line} | cut -d ',' -f 1`
-        commit=`echo ${line} | cut -d ',' -f 2`
-        revert=`echo ${line} | cut -d ',' -f 3`
+         *)
+            # config.csvからデータの読み込み
+            csvfile="${CurrentDir}/.negi/config.csv"
+            printf "OS\tcommit\trevert\n"
+            for line in `cat "${csvfile}" | grep -v ^#`
+            do
+               os=`echo ${line} | cut -d ',' -f 1`
+               commit=`echo ${line} | cut -d ',' -f 2`
+               revert=`echo ${line} | cut -d ',' -f 3`
 
-        printf "${os}\t${commit}\t${revert}\n"
-     done
+               printf "${os}\t${commit}\t${revert}\n"
+            done
 
-     ;;
-   esac
+         ;;
+      esac
 
    ;;
 
@@ -271,11 +273,11 @@ case ${argv[$i-1]} in
          machine_type=`echo ${line} | cut -d ',' -f 2`
          machine_os=`echo ${line} | cut -d ',' -f 3`
 
-        #  echo "name: ${machine_name}"
-        #  echo "type: ${machine_type}"
-        #  echo "os: ${machine_os}"
-        #  echo "----行終わりっ！-------"
-        #
+         #  echo "name: ${machine_name}"
+         #  echo "type: ${machine_type}"
+         #  echo "os: ${machine_os}"
+         #  echo "----行終わりっ！-------"
+         #
          case ${machine_os} in
             linux)
                case ${machine_type} in
