@@ -14,6 +14,8 @@ OBJECT_REVERT = revert_main.c common.c revert_interface.c revert_address.c rever
 
 # compile
 all: $(NAME_COMMIT) $(NAME_REVERT)
+	mv $(NAME_COMMIT) ../
+	mv $(NAME_REVERT) ../
 
 # clean
 clean:
