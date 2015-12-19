@@ -5,7 +5,6 @@
 #include "lib/iproute/libnetlink.h"
 #include <jansson.h>
 
-
 #include "common.h"
 #include "address.h"
 #include "lib/utils.h"
@@ -268,7 +267,7 @@ void modify_address(json_t *ipAddrEntry_json) {
 			exit(2);
 		}
 		fprintf(stderr, "arrange address %s/%d\n", address_name, req.ifa.ifa_prefixlen);
-	}	
+	}
 	fprintf(stderr, "Success arranging all addresses!\n\n");
 }
 

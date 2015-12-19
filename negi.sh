@@ -168,7 +168,7 @@ case ${argv[$i-1]} in
             linux)
                case ${machine_type} in
                   master)
-                     "${CurrentDir}/negi_linux" commit "${commit_file_path}" "${machine_name}"
+                     "${CurrentDir}/linux/negi_linux_commit" "${commit_file_path}" "${machine_name}"
                   ;;
                   vm)
                   ;;
