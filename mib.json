@@ -2,7 +2,7 @@
 {
 	"interfaces": {
 		"ifTable": {
-			"ifEntry": 
+			"ifEntry":
 			[{
 				"ifIndex": 1, // index
 				"ifDscr": "lo", // IFNAME
@@ -32,7 +32,7 @@
 			}]
 		},
 		"ipRouteTable": {
-			"ipRouteEntry": 
+			"ipRouteEntry":
 			[{
 				"ipRouteDest": "192.168.0.0", // DST
 				"ipRouteIfIndex": 1, // OIF

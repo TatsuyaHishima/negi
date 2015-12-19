@@ -19,6 +19,27 @@ int main(int argc, char **argv) {
 
 	if (argc) {
 		if (strcmp("commit", *argv) == 0) {
+			argc--;
+			argv++;
+
+			if (!argc) {
+				printf("Usage: negi commit [filepath] [machine name].\n");
+				exit(2);
+			}
+
+			char *filepath= *argv;
+			argc--;
+			argv++;
+
+			if (!argc) {
+				printf("Usage: negi commit [filepath] [machine name].\n");
+				exit(2);
+			}
+
+			char *machine_name = *argv;
+			argc--;
+			argv++;
+
 			json_t *linux_json = json_object();
 
 			json_t *interface_json = json_object();
@@ -49,12 +70,22 @@ int main(int argc, char **argv) {
 			json_object_set_new(linux_json, "interfaces", interface_json);
 			json_object_set_new(linux_json, "ip", ip_json);
 
-			make_json_file(".negi/negi10.json", linux_json);
+			char buf[2048];
+			sprintf(buf, "%s/%s.json", filepath, machine_name);
+			make_json_file(buf, linux_json);
 
 		}
 		else if (strcmp("revert", *argv) == 0) {
+			argc--;
+			argv++;
+
+			if (!argc) {
+				printf("Usage: negi revert [/path/to/json]\n");
+				exit(2);
+			}
+
+			char *filename = *argv;
 			json_error_t error;
-			char *filename = ".negi/negi10.json";
 			json_t *linux_json = json_load_file(filename , JSON_DECODE_ANY, &error);
 
 			if(!linux_json) {
@@ -66,7 +97,7 @@ int main(int argc, char **argv) {
 			read_interface_file(interface_json);
 
 			json_t *ip_json = json_object_get(linux_json, "ip");
-			
+
 			json_t *address_json = json_object_get(ip_json, "ipAddrTable");
 			read_address_file(address_json);
 
