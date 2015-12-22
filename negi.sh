@@ -3,6 +3,12 @@ CurrentDir="`pwd`"
 
 function Usage() {
    echo "Usage"
+   echo "./negi init"
+   echo "       commit"
+   echo "       revert"
+   echo "       log [num]"
+   echo "       machines {add, del, send, show}"
+   echo "       config   {add, del, show}"
 }
 
 # 入力を受け付ける関数、defaultは$1で指定
