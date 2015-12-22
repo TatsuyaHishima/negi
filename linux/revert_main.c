@@ -13,11 +13,22 @@ int main(int argc, char **argv) {
     argv++;
 
     if (!argc) {
-        printf("Usage: negi revert [/path/to/json]\n");
+        printf("Usage: negi_linux_revert logdirPath machineName\n");
         exit(2);
     }
+    char        *log_dir_path = *argv;
 
-    char        *filename = *argv;
+    argc--;
+    argv++;
+
+    if (!argc) {
+        printf("Usage: negi_linux_revert logdirPath machineName\n");
+        exit(2);
+    }
+    char        *machine_name = *argv;
+    char *filename[2048];
+    sprintf(filename, "%s/%s.json", log_dir_path, machine_name);
+
     json_error_t error;
     json_t      *linux_json = json_load_file(filename, JSON_DECODE_ANY, &error);
 

@@ -15,6 +15,30 @@ function getInfo() {
    echo $text
 }
 
+function auto_ssh() {
+host=$1
+id=$2
+pass=$3
+command=$4
+
+expect -c "
+set timeout 10
+spawn ssh ${id}@${host}
+expect \"Are you sure you want to continue connecting (yes/no)?\" {
+    send \"yes\n\"
+    expect \"${id}@${host}'s password:\"
+    send \"${pass}\n\"
+    expect \"\ \"
+	  send \"${command}\n\"
+} \"${id}@${host}'s password:\" {
+    send \"${pass}\n\"
+    expect \"\ \"
+    send \"${command}\n\"
+}
+interact
+"
+}
+
 argv=("$@")
 i=1
 # echo "argv[`expr $i - 1`]=${argv[$i-1]}"
@@ -69,8 +93,8 @@ case ${argv[$i-1]} in
             echo "ATTENSION: DO NOT CHANGE MACHINE NAME!"
 
             # machines.csvからデータの読み込み
-            csvfile="${CurrentDir}/.negi/machines.csv"
-            for line in `cat "${csvfile}" | grep -v ^#`
+            csvfile_machine="${CurrentDir}/.negi/machines.csv"
+            for line in `cat "${csvfile_machine}" | grep -v ^#`
             do
                machine_name=`echo ${line} | cut -d ',' -f 1`
                # 同一名は登録できない
@@ -86,8 +110,20 @@ case ${argv[$i-1]} in
             printf "What is the OS? [Default: linux] "
             os=`getInfo "linux"`
 
-            echo "${name},${type},${os}" >> ${CurrentDir}/.negi/machines.csv
+            if [ ${type} = "vm" ]; then
+              printf "What is the IP address? "
+              ip=`getInfo ""`
 
+              printf "What is the root password? "
+              pass=`getInfo ""`
+              echo "${name},${type},${os},${ip},${pass}" >> ${CurrentDir}/.negi/machines.csv
+            elif [ ${type} = "container" ]; then
+              printf "What is the container name? "
+              container_name=`getInfo ""`
+              echo "${name},${type},${os},${container_name}" >> ${CurrentDir}/.negi/machines.csv
+            else
+              echo "${name},${type},${os},${container_name}" >> ${CurrentDir}/.negi/machines.csv
+            fi
          ;;
 
          del)
@@ -100,15 +136,15 @@ case ${argv[$i-1]} in
             fi
 
             # machines.csvからデータの読み込み
-            csvfile="${CurrentDir}/.negi/machines.csv"
+            csvfile_machine="${CurrentDir}/.negi/machines.csv"
             lineNum=1
-            for line in `cat "${csvfile}" | grep -v ^#`
+            for line in `cat "${csvfile_machine}" | grep -v ^#`
             do
                lineNum=`expr $lineNum + 1`
                machine_name=`echo ${line} | cut -d ',' -f 1`
                if [ ${name} = ${machine_name} ]; then
-                  sed -e "${lineNum}d" "${csvfile}" > "${csvfile}.tmp"
-                  mv "${csvfile}.tmp" "${csvfile}"
+                  sed -e "${lineNum}d" "${csvfile_machine}" > "${csvfile_machine}.tmp"
+                  mv "${csvfile_machine}.tmp" "${csvfile_machine}"
                   exit
                fi
             done
@@ -116,11 +152,57 @@ case ${argv[$i-1]} in
 
          ;;
 
+         send)
+         # machines.csvからデータの読み込み
+         csvfile_machine="${CurrentDir}/.negi/machines.csv"
+         for line in `cat "${csvfile_machine}" | grep -v ^#`
+         do
+            machine_name=`echo ${line} | cut -d ',' -f 1`
+            machine_type=`echo ${line} | cut -d ',' -f 2`
+            machine_os=`echo ${line} | cut -d ',' -f 3`
+            machine_ip=`echo ${line} | cut -d ',' -f 4`
+            machine_pass=`echo ${line} | cut -d ',' -f 5`
+
+            if [ ${machine_type} = "vm" ]; then
+
+              csvfile_config="${CurrentDir}/.negi/config.csv"
+              for config_line in `cat "${csvfile_config}" | grep -v ^#`
+              do
+                 config_os=`echo ${config_line} | cut -d ',' -f 1`
+                 config_commit=`echo ${config_line} | cut -d ',' -f 2`
+                 config_revert=`echo ${config_line} | cut -d ',' -f 3`
+
+                 expect -c "
+                 set timeout 10
+                 spawn scp -r \"${CurrentDir}/${config_os}\" \"root@${machine_ip}:~/\"
+                 expect \"Are you sure you want to continue connecting (yes/no)?\" {
+                     send \"yes\n\"
+                     expect \":\"
+                     send \"${machine_pass}\n\"
+                 } \":\" {
+                     send \"${machine_pass}\n\"
+                 }
+                 expect {\"100%\" { exit 0 }}
+                 "
+
+                 script=`cat <<-SHELL
+cd ~/${machine_os};
+make;
+exit;
+SHELL`
+       					formatted_script=`echo "${script}" | sed -e 's/\ /\\\\ /g' | tr '\n' '\n'`
+       					auto_ssh ${machine_ip} "root" ${machine_pass} "${formatted_script}"
+              done
+            fi
+
+         done
+         ;;
+
          *) # show
             # machines.csvからデータの読み込み
-            csvfile="${CurrentDir}/.negi/machines.csv"
+            csvfile_machine="${CurrentDir}/.negi/machines.csv"
             printf "name\ttype\tOS\n"
-            for line in `cat "${csvfile}" | grep -v ^#`
+            for line in `cat "${csvfile_machine}" | grep -v ^#`
             do
                machine_name=`echo ${line} | cut -d ',' -f 1`
                machine_type=`echo ${line} | cut -d ',' -f 2`
@@ -152,20 +234,15 @@ case ${argv[$i-1]} in
       echo ${commit_message} >> "${commit_file_path}/message.txt"
 
       # machines.csvからデータの読み込み
-      csvfile="${CurrentDir}/.negi/machines.csv"
-      for line in `cat "${csvfile}" | grep -v ^#`
+      csvfile_machine="${CurrentDir}/.negi/machines.csv"
+      for line in `cat "${csvfile_machine}" | grep -v ^#`
       do
          machine_name=`echo ${line} | cut -d ',' -f 1`
          machine_type=`echo ${line} | cut -d ',' -f 2`
          machine_os=`echo ${line} | cut -d ',' -f 3`
 
-         #  echo "name: ${machine_name}"
-         #  echo "type: ${machine_type}"
-         #  echo "os: ${machine_os}"
-         #  echo "----行終わりっ！-------"
-         #
-         csvfile="${CurrentDir}/.negi/config.csv"
-         for config_line in `cat "${csvfile}" | grep -v ^#`
+         csvfile_config="${CurrentDir}/.negi/config.csv"
+         for config_line in `cat "${csvfile_config}" | grep -v ^#`
          do
             config_os=`echo ${config_line} | cut -d ',' -f 1`
             config_commit=`echo ${config_line} | cut -d ',' -f 2`
@@ -176,10 +253,23 @@ case ${argv[$i-1]} in
                      "${CurrentDir}/${config_commit}" "${commit_file_path}" "${machine_name}"
                   ;;
                   vm)
+					ip=`echo ${line} | cut -d ',' -f 4`
+					password=`echo ${line} | cut -d ',' -f 5`
+					script=`cat <<-SHELL
+						cd ~/;
+            mkdir -p ~/.negi/data/${commit_time};
+            ./${config_commit} ~/.negi/data/${commit_time} ${machine_name}
+						exit;
+SHELL`
+					formatted_script=`echo "${script}" | sed -e 's/\ /\\\\ /g' | tr '\n' '\n'`
+					auto_ssh ${ip} "root" ${password} "${formatted_script}"
                   ;;
                   container)
+                  container_name=`echo ${line} | cut -d ',' -f 4`
+                  # not yet
                   ;;
                   *)
+                  echo "You can only use master or vm now."
                   ;;
                esac
             else
@@ -187,9 +277,6 @@ case ${argv[$i-1]} in
             fi
          done
       done
-
-
-      # "${CurrentDir}/linux commit ${commit_file_path}"
    ;;
 
    config)
@@ -218,15 +305,15 @@ case ${argv[$i-1]} in
             fi
 
             # config.csvからデータの読み込み
-            csvfile="${CurrentDir}/.negi/config.csv"
+            csvfile_config="${CurrentDir}/.negi/config.csv"
             lineNum=1
-            for line in `cat "${csvfile}" | grep -v ^#`
+            for line in `cat "${csvfile_config}" | grep -v ^#`
             do
                lineNum=`expr $lineNum + 1`
                os_name=`echo ${line} | cut -d ',' -f 1`
                if [ ${os} = ${os_name} ]; then
-                  sed -e "${lineNum}d" "${csvfile}" > "${csvfile}.tmp"
-                  mv "${csvfile}.tmp" "${csvfile}"
+                  sed -e "${lineNum}d" "${csvfile_config}" > "${csvfile_config}.tmp"
+                  mv "${csvfile_config}.tmp" "${csvfile_config}"
                   exit
                fi
             done
@@ -235,9 +322,9 @@ case ${argv[$i-1]} in
 
          *)
             # config.csvからデータの読み込み
-            csvfile="${CurrentDir}/.negi/config.csv"
+            csvfile_config="${CurrentDir}/.negi/config.csv"
             printf "OS\tcommit\trevert\n"
-            for line in `cat "${csvfile}" | grep -v ^#`
+            for line in `cat "${csvfile_config}" | grep -v ^#`
             do
                os=`echo ${line} | cut -d ',' -f 1`
                commit=`echo ${line} | cut -d ',' -f 2`
@@ -266,41 +353,45 @@ case ${argv[$i-1]} in
       fi
 
       # machines.csvからデータの読み込み
-      csvfile="${CurrentDir}/.negi/machines.csv"
-      for line in `cat "${csvfile}" | grep -v ^#`
+      csvfile_machine="${CurrentDir}/.negi/machines.csv"
+      for line in `cat "${csvfile_machine}" | grep -v ^#`
       do
          machine_name=`echo ${line} | cut -d ',' -f 1`
          machine_type=`echo ${line} | cut -d ',' -f 2`
          machine_os=`echo ${line} | cut -d ',' -f 3`
 
-         #  echo "name: ${machine_name}"
-         #  echo "type: ${machine_type}"
-         #  echo "os: ${machine_os}"
-         #  echo "----行終わりっ！-------"
-         #
-         case ${machine_os} in
-            linux)
+         csvfile_config="${CurrentDir}/.negi/config.csv"
+         for config_line in `cat "${csvfile_config}" | grep -v ^#`
+         do
+            config_os=`echo ${config_line} | cut -d ',' -f 1`
+            config_revert=`echo ${config_line} | cut -d ',' -f 3`
+
+            if [ ${config_os} = ${machine_os} ]; then
                case ${machine_type} in
                   master)
-                     "${CurrentDir}/linux/negi_linux_revert" "${CurrentDir}/.negi/data/${logtime}/${machine_name}.json"
+                     "${CurrentDir}/negi_linux_revert" "${CurrentDir}/.negi/data/${logtime}" "${machine_name}"
                   ;;
                   vm)
+                  ip=`echo ${line} | cut -d ',' -f 4`
+                  password=`echo ${line} | cut -d ',' -f 5`
+                  script=`cat <<-SHELL
+                    cd ~/;
+                    ./${config_revert} ~/.negi/data/${logtime} ${machine_name};
+                    exit;
+SHELL`
+                  formatted_script=`echo "${script}" | sed -e 's/\ /\\\\ /g' | tr '\n' '\n'`
+                  auto_ssh ${ip} "root" ${password} "${formatted_script}"
                   ;;
                   container)
+                  # not yet
                   ;;
                   *)
+                  echo "You can only use master or vm now. Skip ${machine_name}"
                   ;;
                esac
-            ;;
-
-            *)
-               echo "skip ${machine_name}"
-            ;;
-
-         esac
-      done
-
-
+            fi
+          done
+        done
    ;;
 
    log)
@@ -333,9 +424,3 @@ case ${argv[$i-1]} in
       Usage
    ;;
 esac
-
-# i=`expr $i + 1` # 加算
-# echo "argv[`expr $i - 1`]=${argv[$i-1]}"
-
-# ./negi_linux commit
-# ./negi_linux revert
