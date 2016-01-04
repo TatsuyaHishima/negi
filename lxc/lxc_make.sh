@@ -1,4 +1,4 @@
-#!/bin/sh
+# !/bin/sh
 
 cd /root/lxc/
 /usr/bin/make

@@ -1,4 +1,4 @@
-#!/bin/sh
+# !/bin/sh
 CurrentDir=`pwd`
 logtime=$1
 machine_name=$2

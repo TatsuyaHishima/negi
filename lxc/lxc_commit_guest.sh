@@ -1,4 +1,4 @@
-#!/bin/sh
+# !/bin/sh
 commit_time=$1
 machine_name=$2
 

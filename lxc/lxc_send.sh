@@ -1,3 +1,4 @@
+# !/bin/sh
 CurrentDir=`pwd`
 lxc_name=$1
 
