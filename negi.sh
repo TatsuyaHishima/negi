@@ -22,27 +22,27 @@ function getInfo() {
 }
 
 function auto_ssh() {
-host=$1
-id=$2
-pass=$3
-command=$4
+  host=$1
+  id=$2
+  pass=$3
+  command=$4
 
-expect -c "
-set timeout 10
-spawn ssh ${id}@${host}
-expect \"Are you sure you want to continue connecting (yes/no)?\" {
-    send \"yes\n\"
-    expect \"${id}@${host}'s password:\"
-    send \"${pass}\n\"
-    expect \"\ \"
-	  send \"${command}\n\"
-} \"${id}@${host}'s password:\" {
-    send \"${pass}\n\"
-    expect \"\ \"
-    send \"${command}\n\"
-}
-interact
-"
+  expect -c "
+    set timeout 10
+    spawn ssh ${id}@${host}
+    expect \"Are you sure you want to continue connecting (yes/no)?\" {
+      send \"yes\n\"
+      expect \"${id}@${host}'s password:\"
+      send \"${pass}\n\"
+      expect \"\ \"
+  	  send \"${command}\n\"
+    } \"${id}@${host}'s password:\" {
+      send \"${pass}\n\"
+      expect \"\ \"
+      send \"${command}\n\"
+    }
+    interact
+  "
 }
 
 argv=("$@")
@@ -75,15 +75,14 @@ case ${argv[$i-1]} in
       touch "${CurrentDir}/.negi/machines.csv"
       echo "made .negi/machines.csv"
 
+      # printf "Master machines name? [Default: master] "
+      # name=`getInfo "master"`
 
-      printf "Master machines name? [Default: master] "
-      name=`getInfo "master"`
+      printf "What is the host type? [Default: linux] "
+      host_type=`getInfo "linux"`
 
-      printf "What is this OS? [Default: linux] "
-      os=`getInfo "linux"`
-
-      echo "# name, host_type, OS" > ${CurrentDir}/.negi/machines.csv
-      echo "${name},master,${os}" >> ${CurrentDir}/.negi/machines.csv
+      echo "# name, host_type, AddInfo1, AddInfo2, AddInfo3" > ${CurrentDir}/.negi/machines.csv
+      echo "master,${host_type}" >> ${CurrentDir}/.negi/machines.csv
 
       mkdir "${CurrentDir}/.negi/data"
    ;;
@@ -98,38 +97,31 @@ case ${argv[$i-1]} in
             name=`getInfo "None"`
             echo "ATTENSION: DO NOT CHANGE MACHINE NAME!"
 
+            # 同一名は登録できない
             # machines.csvからデータの読み込み
             csvfile_machine="${CurrentDir}/.negi/machines.csv"
             for line in `cat "${csvfile_machine}" | grep -v ^#`
             do
                machine_name=`echo ${line} | cut -d ',' -f 1`
-               # 同一名は登録できない
                if [ ${name} = ${machine_name} ]; then
                   echo "Can't set exists name."
                   exit
                fi
             done
 
-            printf "What is the type?(vm or container) [Default: vm] "
-            type=`getInfo "vm"`
+            printf "What is the host type? [Default: linux_vm] "
+            host_type=`getInfo "linux_vm"`
 
-            printf "What is the OS? [Default: linux] "
-            os=`getInfo "linux"`
+            printf "Add Info1? "
+            add1=`getInfo ""`
 
-            if [ ${type} = "vm" ]; then
-              printf "What is the IP address? "
-              ip=`getInfo ""`
+            printf "Add Info2? "
+            add2=`getInfo ""`
 
-              printf "What is the root password? "
-              pass=`getInfo ""`
-              echo "${name},${type},${os},${ip},${pass}" >> ${CurrentDir}/.negi/machines.csv
-            elif [ ${type} = "container" ]; then
-              printf "What is the container name? "
-              container_name=`getInfo ""`
-              echo "${name},${type},${os},${container_name}" >> ${CurrentDir}/.negi/machines.csv
-            else
-              echo "${name},${type},${os},${container_name}" >> ${CurrentDir}/.negi/machines.csv
-            fi
+            printf "Add Info3? "
+            add3=`getInfo ""`
+
+            echo "${name},${host_type},${add1},${add2},${add3}" >> ${CurrentDir}/.negi/machines.csv
          ;;
 
          del)
@@ -165,72 +157,47 @@ case ${argv[$i-1]} in
          do
             machine_name=`echo ${line} | cut -d ',' -f 1`
             machine_type=`echo ${line} | cut -d ',' -f 2`
-            machine_os=`echo ${line} | cut -d ',' -f 3`
-            machine_ip=`echo ${line} | cut -d ',' -f 4`
-            machine_pass=`echo ${line} | cut -d ',' -f 5`
-
-            if [ ${machine_type} = "vm" ]; then
-
+            if [ ${machine_name} != "master" ]; then
+              machine_add1=`echo ${line} | cut -d ',' -f 3`
+              machine_add2=`echo ${line} | cut -d ',' -f 4`
+              machine_add3=`echo ${line} | cut -d ',' -f 5`
               csvfile_config="${CurrentDir}/.negi/config.csv"
               for config_line in `cat "${csvfile_config}" | grep -v ^#`
               do
-                 config_os=`echo ${config_line} | cut -d ',' -f 1`
-                 if [ ${config_os} = ${machine_os} ]; then
-                   config_commit=`echo ${config_line} | cut -d ',' -f 2`
-                   config_revert=`echo ${config_line} | cut -d ',' -f 3`
-                   config_make=`echo ${config_line} | cut -d ',' -f 4`
-
-                   expect -c "
-                   set timeout 10
-                   spawn scp -r \"${CurrentDir}/${config_os}\" \"root@${machine_ip}:~/\"
-                   expect \"Are you sure you want to continue connecting (yes/no)?\" {
-                       send \"yes\n\"
-                       expect \":\"
-                       send \"${machine_pass}\n\"
-                   } \":\" {
-                       send \"${machine_pass}\n\"
-                   }
-                   expect {\"100%\" { exit 0 }}
-                   "
-
-                   script=`cat <<-SHELL
-cd ~/${machine_os};
-${config_make};
-exit;
-SHELL`
-         					formatted_script=`echo "${script}" | sed -e 's/\ /\\\\ /g' | tr '\n' '\n'`
-         					auto_ssh ${machine_ip} "root" ${machine_pass} "${formatted_script}"
-                fi
+                 config_type=`echo ${config_line} | cut -d ',' -f 1`
+                 if [ ${machine_type} = ${config_type} ]; then
+                   config_send=`echo ${config_line} | cut -d ',' -f 4`
+                   "${CurrentDir}/${config_type}/${config_send}" "${machine_add1}" "${machine_add2}" "${machine_add3}"
+                 fi
               done
             fi
-
          done
          ;;
 
          *) # show
             # machines.csvからデータの読み込み
             csvfile_machine="${CurrentDir}/.negi/machines.csv"
-            printf "name\ttype\tOS\n"
+            printf "name,\ttype,\tAddInfo1,\tAddInfo2,\tAddInfo3\n"
             for line in `cat "${csvfile_machine}" | grep -v ^#`
             do
                machine_name=`echo ${line} | cut -d ',' -f 1`
                machine_type=`echo ${line} | cut -d ',' -f 2`
-               machine_os=`echo ${line} | cut -d ',' -f 3`
+               machine_add1=`echo ${line} | cut -d ',' -f 3`
+               machine_add2=`echo ${line} | cut -d ',' -f 4`
+               machine_add3=`echo ${line} | cut -d ',' -f 5`
 
-               printf "${machine_name}\t${machine_type}\t${machine_os}\n"
+               printf "${machine_name},\t${machine_type},\t${machine_add1},\t${machine_add2},\t${machine_add3}\n"
             done
-
          ;;
       esac
    ;;
 
    commit)
-
       commit_time=`date +"%Y%m%d%I%M%S"`
       commit_file_path="${CurrentDir}/.negi/data/${commit_time}"
 
       if [ -d "${commit_file_path}" ]; then
-         echo "Don't commit twice in a seconds."
+         echo "Don't commit twice in a second."
          exit
       fi
 
@@ -240,7 +207,7 @@ SHELL`
       printf "Message? [Default: No message] "
       commit_message=`getInfo "No message"`
 
-      echo ${commit_message} >> "${commit_file_path}/message.txt"
+      echo "${commit_message}" >> "${commit_file_path}/message.txt"
 
       # machines.csvからデータの読み込み
       csvfile_machine="${CurrentDir}/.negi/machines.csv"
@@ -248,41 +215,18 @@ SHELL`
       do
          machine_name=`echo ${line} | cut -d ',' -f 1`
          machine_type=`echo ${line} | cut -d ',' -f 2`
-         machine_os=`echo ${line} | cut -d ',' -f 3`
+         machine_add1=`echo ${line} | cut -d ',' -f 3`
+         machine_add2=`echo ${line} | cut -d ',' -f 4`
+         machine_add3=`echo ${line} | cut -d ',' -f 5`
 
          csvfile_config="${CurrentDir}/.negi/config.csv"
          for config_line in `cat "${csvfile_config}" | grep -v ^#`
          do
-            config_os=`echo ${config_line} | cut -d ',' -f 1`
+            config_type=`echo ${config_line} | cut -d ',' -f 1`
             config_commit=`echo ${config_line} | cut -d ',' -f 2`
 
-            if [ ${config_os} = ${machine_os} ]; then
-               case ${machine_type} in
-                  master)
-                     "${CurrentDir}/${config_commit}" "${commit_file_path}" "${machine_name}"
-                  ;;
-                  vm)
-					ip=`echo ${line} | cut -d ',' -f 4`
-					password=`echo ${line} | cut -d ',' -f 5`
-					script=`cat <<-SHELL
-						cd ~/;
-            mkdir -p ~/.negi/data/${commit_time};
-            ./${config_commit} ~/.negi/data/${commit_time} ${machine_name}
-						exit;
-SHELL`
-					formatted_script=`echo "${script}" | sed -e 's/\ /\\\\ /g' | tr '\n' '\n'`
-					auto_ssh ${ip} "root" ${password} "${formatted_script}"
-                  ;;
-                  container)
-                  container_name=`echo ${line} | cut -d ',' -f 4`
-                  # not yet
-                  ;;
-                  *)
-                  echo "You can only use master or vm now."
-                  ;;
-               esac
-            else
-               echo "skip ${machine_name}"
+            if [ ${config_type} = ${machine_type} ]; then
+              "${CurrentDir}/${machine_type}/${config_commit}" "${commit_time}" "${machine_name}" "${machine_add1}" "${machine_add2}" "${machine_add3}"
             fi
          done
       done
@@ -293,25 +237,25 @@ SHELL`
 
       case ${argv[$i-1]} in
          add)
-            printf "What is OS name? [Default: linux] "
-            os=`getInfo "linux"`
+            printf "What is host type? "
+            host_type=`getInfo ""`
 
-            printf "What is the commit script name? [Default: negi_linux] "
-            commit=`getInfo "negi_linux"`
+            printf "What is the commit script name? "
+            commit=`getInfo ""`
 
-            printf "What is the revert script name? [Default: negi_linux] "
-            revert=`getInfo "negi_linux"`
+            printf "What is the revert script name? "
+            revert=`getInfo ""`
 
-            printf="What is the make script? "
-            make=`getInfo ""`
+            printf "What is the send script name? "
+            send=`getInfo ""`
 
-            echo "${os},${commit},${revert}.${make}" >> "${CurrentDir}/.negi/config.csv"
+            echo "${host_type},${commit},${revert},${send}" >> "${CurrentDir}/.negi/config.csv"
          ;;
          del)
-            printf "What is OS name?"
-            os=`getInfo ""`
+            printf "What is host type? "
+            host_type=`getInfo ""`
 
-            if [ ! -n "${os}" ]; then
+            if [ ! -n "${host_type}" ]; then
                echo "Type OS name."
                exit
             fi
@@ -322,8 +266,8 @@ SHELL`
             for line in `cat "${csvfile_config}" | grep -v ^#`
             do
                lineNum=`expr $lineNum + 1`
-               os_name=`echo ${line} | cut -d ',' -f 1`
-               if [ ${os} = ${os_name} ]; then
+               config_type=`echo ${line} | cut -d ',' -f 1`
+               if [ ${config_type} = ${host_type} ]; then
                   sed -e "${lineNum}d" "${csvfile_config}" > "${csvfile_config}.tmp"
                   mv "${csvfile_config}.tmp" "${csvfile_config}"
                   exit
@@ -335,16 +279,16 @@ SHELL`
          *)
             # config.csvからデータの読み込み
             csvfile_config="${CurrentDir}/.negi/config.csv"
-            printf "OS\tcommit\trevert\n"
+            printf "type,\tcommit,\trevert,\tsend\n"
             for line in `cat "${csvfile_config}" | grep -v ^#`
             do
-               os=`echo ${line} | cut -d ',' -f 1`
+               host_type=`echo ${line} | cut -d ',' -f 1`
                commit=`echo ${line} | cut -d ',' -f 2`
                revert=`echo ${line} | cut -d ',' -f 3`
+               send=`echo ${line} | cut -d ',' -f 4`
 
-               printf "${os}\t${commit}\t${revert}\n"
+               printf "${host_type},\t${commit},\t${revert},\t${send}\n"
             done
-
          ;;
       esac
 
@@ -370,44 +314,24 @@ SHELL`
       do
          machine_name=`echo ${line} | cut -d ',' -f 1`
          machine_type=`echo ${line} | cut -d ',' -f 2`
-         machine_os=`echo ${line} | cut -d ',' -f 3`
+         machine_add1=`echo ${line} | cut -d ',' -f 3`
+         machine_add2=`echo ${line} | cut -d ',' -f 4`
+         machine_add3=`echo ${line} | cut -d ',' -f 5`
 
          csvfile_config="${CurrentDir}/.negi/config.csv"
          for config_line in `cat "${csvfile_config}" | grep -v ^#`
          do
-            config_os=`echo ${config_line} | cut -d ',' -f 1`
+            config_type=`echo ${config_line} | cut -d ',' -f 1`
             config_revert=`echo ${config_line} | cut -d ',' -f 3`
 
-            if [ ${config_os} = ${machine_os} ]; then
-               case ${machine_type} in
-                  master)
-                     "${CurrentDir}/negi_linux_revert" "${CurrentDir}/.negi/data/${logtime}" "${machine_name}"
-                  ;;
-                  vm)
-                  ip=`echo ${line} | cut -d ',' -f 4`
-                  password=`echo ${line} | cut -d ',' -f 5`
-                  script=`cat <<-SHELL
-                    cd ~/;
-                    ./${config_revert} ~/.negi/data/${logtime} ${machine_name};
-                    exit;
-SHELL`
-                  formatted_script=`echo "${script}" | sed -e 's/\ /\\\\ /g' | tr '\n' '\n'`
-                  auto_ssh ${ip} "root" ${password} "${formatted_script}"
-                  ;;
-                  container)
-                  # not yet
-                  ;;
-                  *)
-                  echo "You can only use master or vm now. Skip ${machine_name}"
-                  ;;
-               esac
+            if [ ${config_type} = ${machine_type} ]; then
+              "${CurrentDir}/${machine_type}/${config_revert}" "${logtime}" "${machine_name}" "${machine_add1}" "${machine_add2}" "${machine_add3}"
             fi
-          done
-        done
+         done
+      done
    ;;
 
    log)
-
       # 表示するログの数を指定
       log_print_num=5
       if expr "$2" : '[0-9]*' > /dev/null ; then
