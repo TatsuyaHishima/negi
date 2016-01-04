@@ -314,44 +314,24 @@ case ${argv[$i-1]} in
       do
          machine_name=`echo ${line} | cut -d ',' -f 1`
          machine_type=`echo ${line} | cut -d ',' -f 2`
-         machine_os=`echo ${line} | cut -d ',' -f 3`
+         machine_add1=`echo ${line} | cut -d ',' -f 3`
+         machine_add2=`echo ${line} | cut -d ',' -f 4`
+         machine_add3=`echo ${line} | cut -d ',' -f 5`
 
          csvfile_config="${CurrentDir}/.negi/config.csv"
          for config_line in `cat "${csvfile_config}" | grep -v ^#`
          do
-            config_os=`echo ${config_line} | cut -d ',' -f 1`
+            config_type=`echo ${config_line} | cut -d ',' -f 1`
             config_revert=`echo ${config_line} | cut -d ',' -f 3`
 
-            if [ ${config_os} = ${machine_os} ]; then
-               case ${machine_type} in
-                  master)
-                     "${CurrentDir}/negi_linux_revert" "${CurrentDir}/.negi/data/${logtime}" "${machine_name}"
-                  ;;
-                  vm)
-                  ip=`echo ${line} | cut -d ',' -f 4`
-                  password=`echo ${line} | cut -d ',' -f 5`
-                  script=`cat <<-SHELL
-                    cd ~/;
-                    ./${config_revert} ~/.negi/data/${logtime} ${machine_name};
-                    exit;
-SHELL`
-                  formatted_script=`echo "${script}" | sed -e 's/\ /\\\\ /g' | tr '\n' '\n'`
-                  auto_ssh ${ip} "root" ${password} "${formatted_script}"
-                  ;;
-                  container)
-                  # not yet
-                  ;;
-                  *)
-                  echo "You can only use master or vm now. Skip ${machine_name}"
-                  ;;
-               esac
+            if [ ${config_type} = ${machine_type} ]; then
+              "${CurrentDir}/${machine_type}/${config_revert}" "${logtime}" "${machine_name}" "${machine_add1}" "${machine_add2}" "${machine_add3}"
             fi
-          done
-        done
+         done
+      done
    ;;
 
    log)
-
       # 表示するログの数を指定
       log_print_num=5
       if expr "$2" : '[0-9]*' > /dev/null ; then

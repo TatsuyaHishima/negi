@@ -84,7 +84,16 @@ int main(int argc, char **argv) {
 				exit(2);
 			}
 
-			char *filename = *argv;
+			char *filepath= *argv;
+			argc--;
+			argv++;
+
+			char *machine_name = *argv;
+			argc--;
+			argv++;
+
+			char filename[2048];
+			sprintf(filename, "%s/%s.json", filepath, machine_name);
 			json_error_t error;
 			json_t *linux_json = json_load_file(filename , JSON_DECODE_ANY, &error);
 
