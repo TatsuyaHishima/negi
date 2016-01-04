@@ -177,7 +177,7 @@ case ${argv[$i-1]} in
          *) # show
             # machines.csvからデータの読み込み
             csvfile_machine="${CurrentDir}/.negi/machines.csv"
-            printf "name\ttype\tAddInfo1\tAddInfo2\tAddInfo3\n"
+            printf "name,\ttype,\tAddInfo1,\tAddInfo2,\tAddInfo3\n"
             for line in `cat "${csvfile_machine}" | grep -v ^#`
             do
                machine_name=`echo ${line} | cut -d ',' -f 1`
@@ -186,7 +186,7 @@ case ${argv[$i-1]} in
                machine_add2=`echo ${line} | cut -d ',' -f 4`
                machine_add3=`echo ${line} | cut -d ',' -f 5`
 
-               printf "${machine_name}\t${machine_type}\t${machine_add1}\t${machine_add2}\t${machine_add3}\n"
+               printf "${machine_name},\t${machine_type},\t${machine_add1},\t${machine_add2},\t${machine_add3}\n"
             done
          ;;
       esac
@@ -237,25 +237,25 @@ case ${argv[$i-1]} in
 
       case ${argv[$i-1]} in
          add)
-            printf "What is OS name? [Default: linux] "
-            os=`getInfo "linux"`
+            printf "What is host type? "
+            host_type=`getInfo ""`
 
-            printf "What is the commit script name? [Default: negi_linux] "
-            commit=`getInfo "negi_linux"`
+            printf "What is the commit script name? "
+            commit=`getInfo ""`
 
-            printf "What is the revert script name? [Default: negi_linux] "
-            revert=`getInfo "negi_linux"`
+            printf "What is the revert script name? "
+            revert=`getInfo ""`
 
-            printf="What is the make script? "
-            make=`getInfo ""`
+            printf "What is the send script name? "
+            send=`getInfo ""`
 
-            echo "${os},${commit},${revert}.${make}" >> "${CurrentDir}/.negi/config.csv"
+            echo "${host_type},${commit},${revert},${send}" >> "${CurrentDir}/.negi/config.csv"
          ;;
          del)
-            printf "What is OS name?"
-            os=`getInfo ""`
+            printf "What is host type? "
+            host_type=`getInfo ""`
 
-            if [ ! -n "${os}" ]; then
+            if [ ! -n "${host_type}" ]; then
                echo "Type OS name."
                exit
             fi
@@ -266,8 +266,8 @@ case ${argv[$i-1]} in
             for line in `cat "${csvfile_config}" | grep -v ^#`
             do
                lineNum=`expr $lineNum + 1`
-               os_name=`echo ${line} | cut -d ',' -f 1`
-               if [ ${os} = ${os_name} ]; then
+               config_type=`echo ${line} | cut -d ',' -f 1`
+               if [ ${config_type} = ${host_type} ]; then
                   sed -e "${lineNum}d" "${csvfile_config}" > "${csvfile_config}.tmp"
                   mv "${csvfile_config}.tmp" "${csvfile_config}"
                   exit
@@ -279,16 +279,16 @@ case ${argv[$i-1]} in
          *)
             # config.csvからデータの読み込み
             csvfile_config="${CurrentDir}/.negi/config.csv"
-            printf "OS\tcommit\trevert\n"
+            printf "type,\tcommit,\trevert,\tsend\n"
             for line in `cat "${csvfile_config}" | grep -v ^#`
             do
-               os=`echo ${line} | cut -d ',' -f 1`
+               host_type=`echo ${line} | cut -d ',' -f 1`
                commit=`echo ${line} | cut -d ',' -f 2`
                revert=`echo ${line} | cut -d ',' -f 3`
+               send=`echo ${line} | cut -d ',' -f 4`
 
-               printf "${os}\t${commit}\t${revert}\n"
+               printf "${host_type},\t${commit},\t${revert},\t${send}\n"
             done
-
          ;;
       esac
 
