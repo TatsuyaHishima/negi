@@ -1,3 +1,4 @@
+# !/bin/sh
 function auto_ssh() {
   host=$1
   id=$2

@@ -1,4 +1,4 @@
-#!/bin/sh
+# !/bin/sh
 logtime=$1
 machine_name=$2
 

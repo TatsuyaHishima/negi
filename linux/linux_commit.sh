@@ -1,3 +1,4 @@
+# !/bin/sh
 CurrentDir=`pwd`
 commit_time=$1
 machine_name=$2

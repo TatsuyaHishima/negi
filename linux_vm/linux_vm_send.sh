@@ -1,3 +1,4 @@
+# !/bin/sh
 CurrentDir=`pwd`
 
 function auto_ssh() {
