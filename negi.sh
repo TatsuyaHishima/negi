@@ -175,29 +175,32 @@ case ${argv[$i-1]} in
               for config_line in `cat "${csvfile_config}" | grep -v ^#`
               do
                  config_os=`echo ${config_line} | cut -d ',' -f 1`
-                 config_commit=`echo ${config_line} | cut -d ',' -f 2`
-                 config_revert=`echo ${config_line} | cut -d ',' -f 3`
+                 if [ ${config_os} = ${machine_os} ]; then
+                   config_commit=`echo ${config_line} | cut -d ',' -f 2`
+                   config_revert=`echo ${config_line} | cut -d ',' -f 3`
+                   config_make=`echo ${config_line} | cut -d ',' -f 4`
 
-                 expect -c "
-                 set timeout 10
-                 spawn scp -r \"${CurrentDir}/${config_os}\" \"root@${machine_ip}:~/\"
-                 expect \"Are you sure you want to continue connecting (yes/no)?\" {
-                     send \"yes\n\"
-                     expect \":\"
-                     send \"${machine_pass}\n\"
-                 } \":\" {
-                     send \"${machine_pass}\n\"
-                 }
-                 expect {\"100%\" { exit 0 }}
-                 "
+                   expect -c "
+                   set timeout 10
+                   spawn scp -r \"${CurrentDir}/${config_os}\" \"root@${machine_ip}:~/\"
+                   expect \"Are you sure you want to continue connecting (yes/no)?\" {
+                       send \"yes\n\"
+                       expect \":\"
+                       send \"${machine_pass}\n\"
+                   } \":\" {
+                       send \"${machine_pass}\n\"
+                   }
+                   expect {\"100%\" { exit 0 }}
+                   "
 
-                 script=`cat <<-SHELL
+                   script=`cat <<-SHELL
 cd ~/${machine_os};
-make;
+${config_make};
 exit;
 SHELL`
-       					formatted_script=`echo "${script}" | sed -e 's/\ /\\\\ /g' | tr '\n' '\n'`
-       					auto_ssh ${machine_ip} "root" ${machine_pass} "${formatted_script}"
+         					formatted_script=`echo "${script}" | sed -e 's/\ /\\\\ /g' | tr '\n' '\n'`
+         					auto_ssh ${machine_ip} "root" ${machine_pass} "${formatted_script}"
+                fi
               done
             fi
 
@@ -299,7 +302,10 @@ SHELL`
             printf "What is the revert script name? [Default: negi_linux] "
             revert=`getInfo "negi_linux"`
 
-            echo "${os},${commit},${revert}" >> "${CurrentDir}/.negi/config.csv"
+            printf="What is the make script? "
+            make=`getInfo ""`
+
+            echo "${os},${commit},${revert}.${make}" >> "${CurrentDir}/.negi/config.csv"
          ;;
          del)
             printf "What is OS name?"
