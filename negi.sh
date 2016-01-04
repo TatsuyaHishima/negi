@@ -47,7 +47,6 @@ function auto_ssh() {
 
 argv=("$@")
 i=1
-# echo "argv[`expr $i - 1`]=${argv[$i-1]}"
 
 case ${argv[$i-1]} in
 
@@ -69,14 +68,12 @@ case ${argv[$i-1]} in
       echo "made .negi"
 
       touch "${CurrentDir}/.negi/config.csv"
-      echo "# OS, commit, revert" > ${CurrentDir}/.negi/config.csv
-      echo "linux,linux_negi,linux_negi" >> ${CurrentDir}/.negi/config.csv
+      echo "# host_type, commit, revert, send" > ${CurrentDir}/.negi/config.csv
+      echo "linux,linux_commit.sh,linux_revert.sh,linux_send.sh" >> ${CurrentDir}/.negi/config.csv
+      echo "linux_vm,linux_vm_commit.sh,linux_vm_revert.sh,linux_vm_send.sh" >> ${CurrentDir}/.negi/config.csv
 
       touch "${CurrentDir}/.negi/machines.csv"
       echo "made .negi/machines.csv"
-
-      # printf "Master machines name? [Default: master] "
-      # name=`getInfo "master"`
 
       printf "What is the host type? [Default: linux] "
       host_type=`getInfo "linux"`
@@ -224,7 +221,6 @@ case ${argv[$i-1]} in
          do
             config_type=`echo ${config_line} | cut -d ',' -f 1`
             config_commit=`echo ${config_line} | cut -d ',' -f 2`
-
             if [ ${config_type} = ${machine_type} ]; then
               "${CurrentDir}/${machine_type}/${config_commit}" "${commit_time}" "${machine_name}" "${machine_add1}" "${machine_add2}" "${machine_add3}"
             fi
