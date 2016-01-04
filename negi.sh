@@ -71,6 +71,7 @@ case ${argv[$i-1]} in
       echo "# host_type, commit, revert, send" > ${CurrentDir}/.negi/config.csv
       echo "linux,linux_commit.sh,linux_revert.sh,linux_send.sh" >> ${CurrentDir}/.negi/config.csv
       echo "linux_vm,linux_vm_commit.sh,linux_vm_revert.sh,linux_vm_send.sh" >> ${CurrentDir}/.negi/config.csv
+      echo "lxc,lxc_commit_host.sh,lxc_revert_host.sh,lxc_send.sh" >> ${CurrentDir}/.negi/config.csv
 
       touch "${CurrentDir}/.negi/machines.csv"
       echo "made .negi/machines.csv"

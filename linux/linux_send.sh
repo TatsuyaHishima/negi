@@ -1,1 +1,4 @@
-echo "Do nothing for master linux machine."
+CurrentDir=`pwd`
+cd ${CurrentDir}/linux
+make
+cd ../
