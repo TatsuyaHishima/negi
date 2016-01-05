@@ -302,7 +302,7 @@ int down_interface(int index) {
 int read_interface_file(json_t* interfaces_json) {
 
 	// delete virtual interfaces before remake
-	delete_virtual_interface(get_max_index());
+	// delete_virtual_interface(get_max_index());
 
 	json_t *ifTable_json = json_object_get(interfaces_json, "ifTable");
 	json_t *ifEntry_json = json_object_get(ifTable_json, "ifEntry");

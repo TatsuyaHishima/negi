@@ -19,8 +19,18 @@ This is network environment generation management tool. Negi can now manage linu
 ## Install
 Negi don't need to instal. Clone this repository.
 
-### for CentOS
+### for CentOS7
 Following is needed.
+
+```
+yum -y update
+yum -y upgrade
+```
+
+```
+yum -y install git make gcc bzip2
+git clone https://github.com/TatsuyaHishima/negi.git
+```
 
 - jannson
 
@@ -33,6 +43,56 @@ cd jansson-2.7
 make
 make check
 make install # root needed
+cd ../
+```
+
+- make script for master machine
+
+```
+vi /etc/ld.so.conf
+#=> add "/usr/local/lib" to end of the line.
+ldconfig
+```
+```
+cd /path/to/negi/linux
+make
+```
+
+### for Ubuntu14.04
+
+```
+apt-get -y update
+apt-get -y upgrade
+```
+
+```
+apt-get -y install git curl
+```
+
+- jannson
+
+```
+curl -O http://www.digip.org/jansson/releases/jansson-2.7.tar.bz2
+
+bunzip2 -c jansson-2.7.tar.bz2 | tar xf -
+cd jansson-2.7
+./configure
+make
+make check
+make install # root needed
+cd ../
+```
+
+- make script for master machine
+
+```
+vi /etc/ld.so.conf
+#=> add "/usr/local/lib" to end of the line.
+ldconfig
+```
+```
+cd /path/to/negi/linux
+make
 ```
 
 ## Quick Usage
