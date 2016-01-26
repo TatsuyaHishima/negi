@@ -121,6 +121,19 @@ json_t* make_interface_file() {
 			json_object_set_new(interface_json, "ifPhysAddress", json_string(ll_addr_n2a(RTA_DATA(tb[IFLA_ADDRESS]), RTA_PAYLOAD(tb[IFLA_ADDRESS]), ifimsg->ifi_type, abuf, sizeof(abuf))));
 		}
 
+		if (tb[IFLA_LINKINFO]) {
+			struct rtattr *linkinfo[IFLA_INFO_MAX+1];
+			char *kind;
+
+			parse_rtattr_nested(linkinfo, IFLA_INFO_MAX, tb[IFLA_LINKINFO]);
+
+			if (!linkinfo[IFLA_INFO_KIND]){
+				exit(2);
+			}
+			kind = RTA_DATA(linkinfo[IFLA_INFO_KIND]);
+			json_object_set_new(interface_json, "INFO_KIND", json_string(kind));
+		}
+
 		json_object_set_new(interface_json, "linux", linux_json);
 		json_array_append(ifEntry_array, interface_json);
 	}

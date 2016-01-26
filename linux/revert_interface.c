@@ -394,6 +394,15 @@ int read_interface_file(json_t* interfaces_json) {
 				}
 				addattr_l(&req.n, sizeof(req), IFLA_ADDRESS, abuf, len);
 			}
+
+			if (strcmp(key, "INFO_KIND") == 0) {
+				char *type = (char *)json_string_value(value);
+				struct rtattr *linkinfo;
+				linkinfo = addattr_nest(&req.n, sizeof(req), IFLA_LINKINFO);
+				addattr_l(&req.n, sizeof(req), IFLA_INFO_KIND, type, strlen(type));
+				addattr_nest_end(&req.n, linkinfo);
+			}
+
 		}
 		if (real_or_virtual == 1) {
 			down_interface(req.ifi.ifi_index);
