@@ -3,6 +3,12 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <linux/if_arp.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <sys/fcntl.h>
+#include <sys/ioctl.h>
+
+#define BRCTL_ADD_IF 4
 
 #include "lib/iproute/libnetlink.h"
 // #include <linux/netdevice.h> // for lt Linux 2.4
@@ -367,6 +373,86 @@ int down_interface(int index) {
 	return 0;
 }
 
+int br_socket_fd = -1;
+
+int br_init(void)
+{
+        if ((br_socket_fd = socket(AF_LOCAL, SOCK_STREAM, 0)) < 0)
+                return errno;
+        return 0;
+}
+
+int br_add_interface(const char *bridge, const char *dev)
+{
+        struct ifreq ifr;
+        int err;
+        int ifindex = if_nametoindex(dev);
+
+        if (ifindex == 0)
+                return ENODEV;
+
+        strncpy(ifr.ifr_name, bridge, IFNAMSIZ);
+#ifdef SIOCBRADDIF
+        ifr.ifr_ifindex = ifindex;
+        err = ioctl(br_socket_fd, SIOCBRADDIF, &ifr);
+        if (err < 0)
+#endif
+        {
+                unsigned long args[4] = { BRCTL_ADD_IF, ifindex, 0, 0 };
+
+                ifr.ifr_data = (char *) args;
+                err = ioctl(br_socket_fd, SIOCDEVPRIVATE, &ifr);
+        }
+
+        return err < 0 ? errno : 0;
+}
+
+void br_shutdown(void)
+{
+        close(br_socket_fd);
+        br_socket_fd = -1;
+}
+
+int br_addif(char *bridge_name, char *interface_name) {
+        if (br_init()) {
+                fprintf(stderr, "can't setup bridge control: %s\n",
+                strerror(errno));
+                return 1;
+        }
+
+        int e = br_add_interface(interface_name, bridge_name);
+				switch(e) {
+				case 0:
+					break;
+
+				case ENODEV:
+					if (if_nametoindex(interface_name) == 0)
+						fprintf(stderr, "interface %s does not exist!\n", interface_name);
+					else
+						fprintf(stderr, "bridge %s does not exist!\n", bridge_name);
+					break;
+
+				case EBUSY:
+					fprintf(stderr,	"device %s is already a member of a bridge; "
+						"can't enslave it to bridge %s.\n", interface_name,
+						bridge_name);
+					break;
+
+				case ELOOP:
+					fprintf(stderr, "device %s is a bridge device itself; "
+						"can't enslave a bridge device to a bridge device.\n",
+						interface_name);
+					break;
+
+				default:
+					fprintf(stderr, "can't add %s to bridge %s: %s\n",
+						interface_name, bridge_name, strerror(e));
+				}
+
+        br_shutdown();
+        return 0;
+}
+
 // virtual_interface_flagが0ならinterfaceの作成
 // virtual_interface_flagが1ならvirtual interfaceの設定
 int modify_interface(json_t *interfaces_json, int virtual_interface_flag) {
@@ -491,6 +577,8 @@ int modify_interface(json_t *interfaces_json, int virtual_interface_flag) {
 					json_t *slave_value;
 					size_t slave_index;
 					json_array_foreach(slave_json, slave_index, slave_value) {
+						br_addif((char *)json_string_value(slave_value), interface_name);
+
 						printf("%s\n", interface_name);
 						printf("%s\n", (char *)json_string_value(slave_value));
 					}
