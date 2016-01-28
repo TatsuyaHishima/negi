@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <dirent.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <linux/if_arp.h>
@@ -37,6 +39,36 @@ static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n, void *
 	*lp = h;
 
 	return 0;
+}
+
+json_t *get_bridge_name(char *bridge_name) {
+	DIR *dir;
+	struct dirent *dp;
+	char path[512];
+
+	strcpy(path,"/sys/class/net/");
+	strcat(path,bridge_name);
+	strcat(path,"/brif/");
+
+	if ((dir = opendir(path))==NULL) {
+		perror("opendir");
+		exit(-1);
+	}
+
+	json_t *bridge_json = json_object();
+	json_t *bridges_json = json_array();
+
+	int max_bridge = 0;
+	for (dp = readdir(dir); dp != NULL; dp = readdir(dir)) {
+		if (max_bridge > 1) {
+			json_array_append(bridges_json, json_string(dp->d_name));
+		}
+		max_bridge++;
+	}
+	closedir(dir);
+	json_object_set_new(bridge_json, "slave", bridges_json);
+
+	return bridge_json;
 }
 
 json_t* make_interface_file() {
@@ -89,7 +121,6 @@ json_t* make_interface_file() {
 		struct rtattr *tb[IFLA_MAX+1];
 		parse_rtattr(tb, IFLA_MAX, IFLA_RTA(ifimsg), len);
 
-
 		if (tb[IFLA_IFNAME]) {
 			// printf("\n%s\n", (char *)RTA_DATA(tb[IFLA_IFNAME]));
 			json_object_set_new(interface_json, "ifDscr", json_string((char *)RTA_DATA(tb[IFLA_IFNAME])));
@@ -128,10 +159,21 @@ json_t* make_interface_file() {
 			parse_rtattr_nested(linkinfo, IFLA_INFO_MAX, tb[IFLA_LINKINFO]);
 
 			if (!linkinfo[IFLA_INFO_KIND]){
-				exit(2);
+				json_object_set_new(interface_json, "IFLA_LINKINFO", json_integer((int)RTA_DATA(tb[IFLA_LINKINFO])));
+				// printf("%d\n", (int)RTA_DATA(tb[IFLA_LINKINFO]));
+				// continue;
+			} else {
+				kind = RTA_DATA(linkinfo[IFLA_INFO_KIND]);
+				if (strcmp(kind, "bridge") == 0 && tb[IFLA_IFNAME]) {
+					json_object_set_new(interface_json, "ifType", json_string(kind));
+					char *bridge_name = (char *)RTA_DATA(tb[IFLA_IFNAME]);
+					json_t *bridge_list_json = get_bridge_name(bridge_name);
+					json_object_set_new(linux_json, "bridge", bridge_list_json);
+				}
+				else {
+					continue;
+				}
 			}
-			kind = RTA_DATA(linkinfo[IFLA_INFO_KIND]);
-			json_object_set_new(interface_json, "INFO_KIND", json_string(kind));
 		}
 
 		json_object_set_new(interface_json, "linux", linux_json);
