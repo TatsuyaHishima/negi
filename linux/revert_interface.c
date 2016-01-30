@@ -231,120 +231,51 @@ int get_max_index() {
 }
 
 int interface_real_or_virtual(json_t *interface_json) {
-	int soc;
-	struct sockaddr_nl sa;
-	struct {
-		struct nlmsghdr nh;
-		struct rtgenmsg gen;
-	} request;
-	int seq = 100;
 
-	struct nlmsghdr *nlhdr;
-
-	struct sockaddr_nl kernel;
-	struct msghdr rtnl_msg;
-	struct iovec io;
-	memset(&rtnl_msg, 0, sizeof(rtnl_msg));
-	memset(&kernel, 0, sizeof(kernel));
-
-	// Make Request Message to Kernel
-	memset(&request, 0, sizeof(request));
-	kernel.nl_family = AF_NETLINK; /* fill-in kernel address (destination) */
-
-	// Make Netlink Socket
-	soc = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
-
-	// Preparing sockaddr_nl
-	memset(&sa, 0, sizeof(sa));
-	sa.nl_family = AF_NETLINK; // use netlink
-	sa.nl_pid = 0; // kernel
-	sa.nl_groups = 0; // unicast
-
-	request.nh.nlmsg_len = sizeof(request);
-	request.nh.nlmsg_type = RTM_GETLINK;
-	request.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
-	request.nh.nlmsg_pid = 0; // kernel
-	request.nh.nlmsg_seq = seq; // need to hack
-	request.gen.rtgen_family = AF_PACKET;
-
-	io.iov_base = &request;
-	io.iov_len = request.nh.nlmsg_len;
-	rtnl_msg.msg_iov = &io;
-	rtnl_msg.msg_iovlen = 1;
-	rtnl_msg.msg_name = &kernel;
-	rtnl_msg.msg_namelen = sizeof(kernel);
-
-	// Send Netlink Message to Kernel
-	sendmsg(soc, (struct msghdr *) &rtnl_msg, 0);
-
-	// Receive Message from Kernel
-	int end = 0;
-	char buf[IFLIST_REPLY_BUFFER];
-
-	while (!end) {
-		int len;
-		struct msghdr rtnl_reply;    /* generic msghdr structure */
-		struct iovec io_reply;
-
-		memset(&io_reply, 0, sizeof(io_reply));
-		memset(&rtnl_reply, 0, sizeof(rtnl_reply));
-
-		io.iov_base = buf;
-		io.iov_len = IFLIST_REPLY_BUFFER;
-		rtnl_reply.msg_iov = &io;
-		rtnl_reply.msg_iovlen = 1;
-		rtnl_reply.msg_name = &kernel;
-		rtnl_reply.msg_namelen = sizeof(kernel);
-
-    	len = recvmsg(soc, &rtnl_reply, 0); /* read lots of data */
-		if (len < 1) {
-			perror("recvmsg");
-			return -1;
-		}
-
-		// Analyze Netlink Message
-		for (nlhdr = (struct nlmsghdr *) buf; NLMSG_OK(nlhdr, len); nlhdr = NLMSG_NEXT(nlhdr, len)) {
-			switch (nlhdr->nlmsg_type) {
-
-				case 3:
-				end = 1;
-				break;
-
-				case 16:
-				end = 0;
-				struct ifinfomsg *ifimsg;
-				if (nlhdr->nlmsg_type != RTM_NEWLINK) {
-					printf("error: %d\n", nlhdr->nlmsg_type);
-					continue;
-				}
-
-				// Process Data of Netlink Message as interface
-				ifimsg = NLMSG_DATA(nlhdr);
-				if (ifimsg->ifi_family != AF_UNSPEC && ifimsg->ifi_family != AF_INET6) {
-					printf("error family: %d\n", ifimsg->ifi_family);
-					continue;
-				}
-
-
-				if (json_object_get(interface_json, "ifIndex") != NULL) {
-					int interface_index = (int)json_number_value(json_object_get(interface_json, "ifIndex"));
-					if (ifimsg->ifi_index == interface_index) {
-						return 1; // real interface
-					}
-				}
-
-				break;
-
-				default:
-				printf("message type %d, length %d\n", nlhdr->nlmsg_type, nlhdr->nlmsg_len);
-				break;
-			}
-		}
-		return 2; // virtual interface
+	if (json_object_get(interface_json, "ifIndex") == NULL) {
+		fprintf(stderr, "can not get interface index from json.\n");
+		return -1;
 	}
-	close(soc);
+	int interface_index = (int)json_number_value(json_object_get(interface_json, "ifIndex"));
 
-	return -1;
+	struct rtnl_handle rth = { .fd = -1 };
+
+	if (rtnl_open(&rth, 0) < 0) {
+		exit(1);
+	}
+
+	if (rtnl_wilddump_request(&rth, AF_UNSPEC, RTM_GETLINK) < 0) {
+		perror("Cannot send dump request");
+		exit(1);
+	}
+
+	struct nlmsg_list *linfo = NULL;
+
+	if (rtnl_dump_filter(&rth, store_nlmsg, &linfo, NULL, NULL) < 0) {
+		fprintf(stderr, "Dump terminated\n");
+		exit(1);
+	}
+
+	struct nlmsg_list *l, *n;
+
+	for (l = linfo; l; l = n) {
+		n = l->next;
+		struct nlmsghdr *nlhdr = &(l->h);
+		struct ifinfomsg *ifimsg = NLMSG_DATA(nlhdr);
+
+		// Process Data of Netlink Message as ifinfomsg
+		if (ifimsg->ifi_family != AF_UNSPEC && ifimsg->ifi_family != AF_INET6) {
+			printf("error family: %d\n", ifimsg->ifi_family);
+			continue;
+		}
+
+		if (ifimsg->ifi_index == interface_index) {
+			return 1; // real
+		}
+	}
+	rtnl_close(&rth);
+
+	return 2; // virtual
 }
 
 int down_interface(int index) {
