@@ -12,11 +12,11 @@ function auto_ssh() {
       send \"yes\n\"
       expect \"${id}@${host}'s password:\"
       send \"${pass}\n\"
-      expect \"\ \"
+      expect \"\# \"
   	  send \"${command}\n\"
     } \"${id}@${host}'s password:\" {
       send \"${pass}\n\"
-      expect \"\ \"
+      expect \"\# \"
       send \"${command}\n\"
     }
     interact
