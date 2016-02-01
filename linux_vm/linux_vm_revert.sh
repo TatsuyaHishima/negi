@@ -28,7 +28,6 @@ machine_name=$2
 ip=$3
 password=$4
 addinfo3=$5
-echo "hoge"
 script=`cat <<-SHELL
   cd ~/;
   ./negi_linux_revert ~/.negi/data/${revert_time} ${machine_name};

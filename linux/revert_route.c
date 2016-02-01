@@ -302,6 +302,10 @@ void modify_route(json_t *ipRouteEntry_json, int default_flag) {
 				// fprintf(stderr, "route already exists.\n");
 				break;
 
+				case 19: // No such device
+				// fprintf(stderr, "No such device");
+				break;
+
 				default:
 				fprintf(stderr, "ERROR!\terrno: %d\n", errnum);
 				perror("Netlink");
