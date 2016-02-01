@@ -279,9 +279,6 @@ void modify_route(json_t *ipRouteEntry_json, int default_flag)
                 }
             }
 
-            if (skip_flag == 1) {
-                continue;
-            }
             ll_init_map(&rth);
 
             if (req.rtm.rtm_family == AF_UNSPEC) {
