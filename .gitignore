@@ -1,4 +1,6 @@
 --
+linux/linux_commit
+linux/linux_revert
 .negi/*
 log.txt
 .idea

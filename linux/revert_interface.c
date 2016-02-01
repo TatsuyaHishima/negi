@@ -103,6 +103,7 @@ int check_virtual_interface(int ifindex) {
 				}
 			}
 		}
+		return 0;
 	}
 
 	free(l);
@@ -151,7 +152,6 @@ int delete_virtual_interface(int max_index_num) {
 		// Send Netlink Message to Kernel
 		n = sendto(soc, (void *)nlhdr, nlhdr->nlmsg_len, 0, (struct sockaddr *)&sa, sizeof(sa));
 		if (n < 0) {
-			printf("%d:\n", i);
 			perror("sendto");
 			return -1;
 		}
@@ -509,9 +509,6 @@ int modify_interface(json_t *interfaces_json, int virtual_interface_flag) {
 					size_t slave_index;
 					json_array_foreach(slave_json, slave_index, slave_value) {
 						br_addif((char *)json_string_value(slave_value), interface_name);
-
-						printf("%s\n", interface_name);
-						printf("%s\n", (char *)json_string_value(slave_value));
 					}
 				}
 			}
