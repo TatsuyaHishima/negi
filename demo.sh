@@ -23,30 +23,35 @@ function auto_ssh() {
   "
 }
 
+function wait_ms() {
+  STOP=`expr $START + $1`
+  while [ $TIME -lt $STOP ]
+  do
+    TIME=`date "+%M%S%2N"`
+  done
+}
+
 SCRIPT1_TIME=2000 # 20sec
 
 START=`date "+%M%S%2N"`
 TIME=`date "+%M%S%2N"`
 
-
+#######################
 ./negi log
-sleep(5)
+sleep 5
 
 script=`cat <<-SHELL
-  clear;
-	ip addr show dev ens9;
-  sleep(5);
-	exit;
+sleep 5;
+clear;
+ip addr show dev ens9;
+sleep 5;
+exit;
 SHELL`
 formatted_script=`echo "${script}" | sed -e 's/\ /\\\\ /g' | tr '\n' '\n'`
 auto_ssh "guest1" "negipkj" "${formatted_script}"
 
-STOP=`expr $START + $SCRIPT1_TIME`
-while [ $TIME -lt $STOP ]
-do
-  TIME=`date "+%M%S%2N"`
-  echo $TIME
-done
+wait_ms 1500
+########################
 
 expect -c "
   set timeout 10
@@ -57,29 +62,28 @@ expect -c "
   interact
 "
 
-
-STOP=`expr $STOP + $SCRIPT1_TIME`
-while [ $TIME -lt $STOP ]
-do
-  TIME=`date "+%M%S%2N"`
-  echo $TIME
-done
+wait_ms 3000
+#########################
 
 script=`cat <<-SHELL
+  sleep 5;
   clear;
 	ip addr show dev ens9;
-  sleep(5);
 	exit;
 SHELL`
 formatted_script=`echo "${script}" | sed -e 's/\ /\\\\ /g' | tr '\n' '\n'`
 auto_ssh "guest1" "negipkj" "${formatted_script}"
 
+wait_ms 4000
+#######################
+
 script=`cat <<-SHELL
-  clear;
-  ping 192.168.0.1 -c 4;
-  sleep(3);
+  sleep 5;
   clear;
   traceroute -nI 192.168.0.1
+  sleep 3;
+  clear;
+  ping 192.168.0.1 -c 4;
 	exit;
 SHELL`
 formatted_script=`echo "${script}" | sed -e 's/\ /\\\\ /g' | tr '\n' '\n'`
