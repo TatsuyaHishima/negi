@@ -10,7 +10,7 @@
 
 void write_forward(char *forward_num) {
   FILE *file;
-	file = fopen("test.txt","w");
+	file = fopen("/proc/sys/net/ipv4/ip_forward","w");
 	fprintf(file,"%s\n", forward_num);
 	fclose(file);
 	return 0;
