@@ -8,6 +8,14 @@
 #include "common.h"
 #include <jansson.h>
 
+void write_forward(char *forward_num) {
+  FILE *file;
+	file = fopen("test.txt","w");
+	fprintf(file,"%s\n", forward_num);
+	fclose(file);
+	return 0;
+}
+
 int main(int argc, char **argv) {
     argc--;
     argv++;
@@ -42,6 +50,9 @@ int main(int argc, char **argv) {
     read_interface_file(interface_json);
 
     json_t *ip_json = json_object_get(linux_json, "ip");
+
+    json_t *forward = json_object_get(ip_json, "ipForwarding");
+    write_forward(json_string_value(forward));
 
     json_t *address_json = json_object_get(ip_json, "ipAddrTable");
     read_address_file(address_json);

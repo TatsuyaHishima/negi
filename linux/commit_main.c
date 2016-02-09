@@ -8,7 +8,28 @@
 #include "common.h"
 #include <jansson.h>
 
-int main(int argc, char **argv) {
+json_t *forward()
+{
+    FILE *fp;
+    char *fname = "/proc/sys/net/ipv4/ip_forward";
+    char  s[100];
+    json_t *forward_num;
+
+    fp = fopen(fname, "r");
+    if (fp == NULL) {
+        perror("fopen");
+        exit(2);
+    }
+
+    while (fgets(s, 100, fp) != NULL) {
+        int n = strlen(s);
+        s[n-1] = '\0';
+        return json_string(s);
+    }
+}
+
+int main(int argc, char **argv)
+{
     argc--;
     argv++;
 
@@ -40,6 +61,8 @@ int main(int argc, char **argv) {
     }
 
     json_t *ip_json = json_object();
+
+    json_object_set_new(ip_json, "ipForwarding", forward());
 
     json_t *address_json = json_object();
     address_json = make_address_file();
