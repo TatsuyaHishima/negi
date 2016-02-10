@@ -1,0 +1,66 @@
+{
+    "ipRouteEntry": [
+        {
+            "ipRouteNextHop": "10.0.2.15", 
+            "ipRouteProto": "U", 
+            "ipRouteDest": "10.0.2.0", 
+            "ipRouteMask": "255.255.255.0", 
+            "ipRouteIfIndex": "em0"
+        }, 
+        {
+            "ipRouteNextHop": "localhost", 
+            "ipRouteProto": "UH", 
+            "ipRouteDest": "127.0.0.1", 
+            "ipRouteIfIndex": "lo0"
+        }, 
+        {
+            "ipRouteNextHop": "192.168.56.103", 
+            "ipRouteProto": "U", 
+            "ipRouteDest": "192.168.56.0", 
+            "ipRouteMask": "255.255.255.0", 
+            "ipRouteIfIndex": "em1"
+        }, 
+        {
+            "ipRouteNextHop": "::1", 
+            "ipRouteProto": "UGRS", 
+            "ipRouteDest": "::/96", 
+            "ipRouteIfIndex": "lo0"
+        }, 
+        {
+            "ipRouteNextHop": "::1", 
+            "ipRouteProto": "UGRS", 
+            "ipRouteDest": "::ffff:0.0.0.0/96", 
+            "ipRouteIfIndex": "lo0"
+        }, 
+        {
+            "ipRouteNextHop": "fe80::a00:27ff:fe08:411a%em0", 
+            "ipRouteProto": "U", 
+            "ipRouteDest": "ff01::/32", 
+            "ipRouteIfIndex": "em0"
+        }, 
+        {
+            "ipRouteNextHop": "::1", 
+            "ipRouteProto": "U", 
+            "ipRouteDest": "ff01::/32", 
+            "ipRouteIfIndex": "lo0"
+        }, 
+        {
+            "ipRouteNextHop": "::1", 
+            "ipRouteProto": "UGRS", 
+            "ipRouteDest": "ff02::/16", 
+            "ipRouteIfIndex": "lo0"
+        }, 
+        {
+            "ipRouteNextHop": "fe80::a00:27ff:fe08:411a%em0", 
+            "ipRouteProto": "U", 
+            "ipRouteDest": "ff02::/32", 
+            "ipRouteIfIndex": "em0"
+        }, 
+        {
+            "ipRouteNextHop": "::1", 
+            "ipRouteProto": "U", 
+            "ipRouteDest": "ff02::/32", 
+            "ipRouteIfIndex": "lo0"
+        }
+    ]
+}
