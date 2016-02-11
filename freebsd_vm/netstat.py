@@ -28,7 +28,10 @@ def main():
                     continue
                 elem2 = line2.split()
                 if len(elem2) > 4:
-                    entry = {"ipRouteDest": elem2[0], "ipRouteIfIndex": elem[3], "ipRouteNextHop": elem2[4], "ipRouteProto": elem[2], "ipRouteMask": elem2[2]}
+                    if re.search(r'default', elem2[0]):
+                        entry = {"ipRouteDest": elem2[0], "ipRouteIfIndex": elem[3], "ipRouteNextHop": elem2[1], "ipRouteProto": elem[2], "ipRouteMask": elem2[2]}
+                    else:
+                        entry = {"ipRouteDest": elem2[0], "ipRouteIfIndex": elem[3], "ipRouteNextHop": elem2[4], "ipRouteProto": elem[2], "ipRouteMask": elem2[2]}
                 else:
                     entry = {"ipRouteDest": elem[0], "ipRouteIfIndex": elem[3], "ipRouteNextHop": elem2[0], "ipRouteProto": elem[2]}
                 array.append(entry)
@@ -50,4 +53,3 @@ def exec_cmd(cmd):
 
 if __name__ == '__main__':
     main()
-

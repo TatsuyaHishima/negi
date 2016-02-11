@@ -94,11 +94,11 @@ main(int argc, char **argv)
       if (interface_flag) {
       	json_object_set_new(interface_json, "ifIndex", json_integer(ifr.ifr_index));
       } else {
-      	json_object_set_new(address_json, "ipAdEntIfIndex", json_string((char *)ifa->ifa_name));      	
+      	json_object_set_new(address_json, "ipAdEntIfIndex", json_string((char *)ifa->ifa_name));
       }
       // printf("index: %d\n", ifr.ifr_index);
     }
-    if (ioctl(s, SIOCGIFMETRIC, &ifr) != -1) 
+    if (ioctl(s, SIOCGIFMETRIC, &ifr) != -1)
       // printf("metric: %d\n", ifr.ifr_metric);
 
     if (ioctl(s, SIOCGIFMTU, &ifr) != -1) {
@@ -169,9 +169,7 @@ main(int argc, char **argv)
     fprintf(stderr, "Error: can't read json file.\n");
     return -1;
   }
-  json_t *ipRouteTable_json = json_object();
-  json_object_set_new(ipRouteTable_json, "ipRouteEntry", tmp_json);
-  json_object_set_new(ip_json, "ipRouteTable", ipRouteTable_json);
+  json_object_set_new(ip_json, "ipRouteTable", tmp_json);
   json_object_set_new(bsd_json, "ip", ip_json);
 
   argc--;

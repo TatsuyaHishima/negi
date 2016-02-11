@@ -13,24 +13,32 @@ ifEntries = tmp["interfaces"]["ifTable"]["ifEntry"]
 for ifEntry in ifEntries:
     if "ifOperStatus" in ifEntry:
         if ifEntry["ifOperStatus"] == 1:
-            subprocess.call(['ifconfig', ifEntry["ifDscr"], 'up'], shell=False)
+            p = subprocess.Popen(['ifconfig', ifEntry["ifDscr"], 'up'], stderr=subprocess.PIPE)
+            output, err = p.communicate()
         else:
-            subprocess.call(['ifconfig', ifEntry["ifDscr"], 'down'], shell=False)
+            p = subprocess.Popen(['ifconfig', ifEntry["ifDscr"], 'down'], stderr=subprocess.PIPE)
+            output, err = p.communicate()
 
     if ifEntry["ifMtu"]:
-        subprocess.call(['ifconfig', ifEntry["ifDscr"], 'mtu', str(ifEntry["ifMtu"])], shell=False)
+        p = subprocess.Popen(['ifconfig', ifEntry["ifDscr"], 'mtu', str(ifEntry["ifMtu"])], stderr=subprocess.PIPE)
+        output, err = p.communicate()
 
 ipAddrEntries = tmp["ip"]["ipAddrTable"]["ipAddrEntry"]
 for ipAddrEntry in ipAddrEntries:
     if "ipAdEntAddr" in ipAddrEntry:
         if re.search("^fe80", ipAddrEntry["ipAdEntAddr"]) or re.match("::1", ipAddrEntry["ipAdEntAddr"]):
             continue
-        subprocess.call(['ifconfig', ipAddrEntry["ipAdEntIfIndex"], ipAddrEntry["ipAdEntAddr"], 'netmask', ipAddrEntry["ipAdEntNetMask"]])
+        p = subprocess.Popen(['ifconfig', ipAddrEntry["ipAdEntIfIndex"], ipAddrEntry["ipAdEntAddr"], 'netmask', ipAddrEntry["ipAdEntNetMask"]], stderr=subprocess.PIPE)
+        output, err = p.communicate()
 
 ipRouteEntries = tmp["ip"]["ipRouteTable"]["ipRouteEntry"]
-subprocess.call(['route', 'flush'])
+p = subprocess.Popen(['route', 'flush'], stderr=subprocess.PIPE)
+output, err = p.communicate()
+
 for ipRouteEntry in ipRouteEntries:
     if "ipRouteMask" in ipRouteEntry:
-        subprocess.call(['route', 'add', '-net', ipRouteEntry["ipRouteDest"], '-netmask', ipRouteEntry["ipRouteMask"], ipRouteEntry["ipRouteNextHop"]])
+        p = subprocess.Popen(['route', 'add', '-net', ipRouteEntry["ipRouteDest"], '-netmask', ipRouteEntry["ipRouteMask"], ipRouteEntry["ipRouteNextHop"]], stderr=subprocess.PIPE)
+        output, err = p.communicate()
     elif "ipRouteDest" in ipRouteEntry and "ipRouteNextHop" in ipRouteEntry:
-        subprocess.call(['route', 'add', ipRouteEntry["ipRouteDest"], ipRouteEntry["ipRouteNextHop"]])
+        p = subprocess.Popen(['route', 'add', ipRouteEntry["ipRouteDest"], ipRouteEntry["ipRouteNextHop"]], stderr=subprocess.PIPE)
+        output, err = p.communicate()
