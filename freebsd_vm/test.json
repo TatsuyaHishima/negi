@@ -1,0 +1,136 @@
+{
+    "ip": {
+        "ipAddrTable": {
+            "ipAddrEntry": [
+                {
+                    "ipAdEntAddr": "fe80::a00:27ff:fe08:411a",
+                    "ipAdEntIfIndex": "em0",
+                    "ipAdEntNetMask": "fe80::a00:27ff:fe08:411a"
+                },
+                {
+                    "ipAdEntAddr": "10.0.2.15",
+                    "ipAdEntIfIndex": "em0",
+                    "ipAdEntNetMask": "255.255.255.0"
+                },
+                {
+                    "ipAdEntAddr": "192.168.56.103",
+                    "ipAdEntIfIndex": "em1",
+                    "ipAdEntNetMask": "255.255.255.0"
+                },
+                {
+                    "ipAdEntAddr": "::1",
+                    "ipAdEntIfIndex": "lo0",
+                    "ipAdEntNetMask": "::1"
+                },
+                {
+                    "ipAdEntAddr": "fe80::1",
+                    "ipAdEntIfIndex": "lo0",
+                    "ipAdEntNetMask": "fe80::1"
+                },
+                {
+                    "ipAdEntIfIndex": "lo0"
+                },
+                {
+                    "ipAdEntAddr": "127.0.0.1",
+                    "ipAdEntIfIndex": "lo0",
+                    "ipAdEntNetMask": "255.0.0.0"
+                }
+            ]
+        },
+        "ipRouteTable": {
+            "ipRouteEntry": {
+                "ipRouteEntry": [
+                    {
+                        "ipRouteNextHop": "10.0.2.15",
+                        "ipRouteIfIndex": "em0",
+                        "ipRouteMask": "255.255.255.0",
+                        "ipRouteProto": "U",
+                        "ipRouteDest": "10.0.2.0"
+                    },
+                    {
+                        "ipRouteNextHop": "localhost",
+                        "ipRouteIfIndex": "lo0",
+                        "ipRouteProto": "UH",
+                        "ipRouteDest": "127.0.0.1"
+                    },
+                    {
+                        "ipRouteNextHop": "192.168.56.103",
+                        "ipRouteIfIndex": "em1",
+                        "ipRouteMask": "255.255.255.0",
+                        "ipRouteProto": "U",
+                        "ipRouteDest": "192.168.56.0"
+                    },
+                    {
+                        "ipRouteNextHop": "::1",
+                        "ipRouteIfIndex": "lo0",
+                        "ipRouteProto": "UGRS",
+                        "ipRouteDest": "::/96"
+                    },
+                    {
+                        "ipRouteNextHop": "::1",
+                        "ipRouteIfIndex": "lo0",
+                        "ipRouteProto": "UGRS",
+                        "ipRouteDest": "::ffff:0.0.0.0/96"
+                    },
+                    {
+                        "ipRouteNextHop": "fe80::a00:27ff:fe08:411a%em0",
+                        "ipRouteIfIndex": "em0",
+                        "ipRouteProto": "U",
+                        "ipRouteDest": "ff01::/32"
+                    },
+                    {
+                        "ipRouteNextHop": "::1",
+                        "ipRouteIfIndex": "lo0",
+                        "ipRouteProto": "U",
+                        "ipRouteDest": "ff01::/32"
+                    },
+                    {
+                        "ipRouteNextHop": "::1",
+                        "ipRouteIfIndex": "lo0",
+                        "ipRouteProto": "UGRS",
+                        "ipRouteDest": "ff02::/16"
+                    },
+                    {
+                        "ipRouteNextHop": "fe80::a00:27ff:fe08:411a%em0",
+                        "ipRouteIfIndex": "em0",
+                        "ipRouteProto": "U",
+                        "ipRouteDest": "ff02::/32"
+                    },
+                    {
+                        "ipRouteNextHop": "::1",
+                        "ipRouteIfIndex": "lo0",
+                        "ipRouteProto": "U",
+                        "ipRouteDest": "ff02::/32"
+                    }
+                ]
+            }
+        }
+    },
+    "interfaces": {
+        "ifTable": {
+            "ifEntry": [
+                {
+                    "ifPhysAddress": "08:00:27:08:41:1a",
+                    "ifDscr": "em0",
+                    "ifOperStatus": 1,
+                    "ifMtu": 1500,
+                    "ifIndex": 1
+                },
+                {
+                    "ifPhysAddress": "08:00:27:40:f5:35",
+                    "ifDscr": "em1",
+                    "ifOperStatus": 1,
+                    "ifMtu": 1500,
+                    "ifIndex": 2
+                },
+                {
+                    "ifPhysAddress": "00:00:00:00:00:00",
+                    "ifDscr": "lo0",
+                    "ifOperStatus": 1,
+                    "ifMtu": 16384,
+                    "ifIndex": 3
+                }
+            ]
+        }
+    }
+}

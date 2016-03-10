@@ -1,0 +1,54 @@
+// http://park1.wakwak.com/~ima/freebsd_netsnmpoidlist_p4.html参照
+{
+	"interfaces": {
+		"ifTable": {
+			"ifEntry":
+			[{
+				"ifIndex": 1, // index
+				"ifDscr": "lo", // IFNAME
+				"ifMtu": 2555, // MTU
+				"ifPhysAddress": "12:dd:b1:3e:9d:00", // ADDRESS
+				"ifOperStatus": 1, // UP 1, DOWN 2, TEST 3
+				"linux": {
+					"ifi_flags": 8,
+					"ifi_type": 1,
+				},
+			},{
+
+			}]
+		}
+	},
+	"ip": {
+		"ipForwarding": 1, // gateway 1, not gateway 0
+		"ipAddrTable": {
+			"ipAddrEntry":
+			[{
+				"ipAdEntAddr": "192.168.0.1", // ADDRESS
+				"ipAdEntIfIndex": 1, // interface
+				"ipAdEntNetMask": 24, // prefixlen
+				"ipAdEntBcastAddr": "255.255.255.0" // BROADCAST
+			},{
+
+			}]
+		},
+		"ipRouteTable": {
+			"ipRouteEntry":
+			[{
+				"ipRouteDest": "192.168.0.0", // DST
+				"ipRouteIfIndex": 1, // OIF
+				"ipRouteMetric1": 10, // PRIORITY
+				"ipRouteNextHop": "192.168.0.2", // GATEWAY
+				"ipRouteType": 1, // このルーティング情報のルーティングタイプ。1（その他）2（ルートなし），3（直接），4（非直接。ゲートウェイを経由する場合など） // rtm_type
+				"ipRouteProto": 1, // このルーティング情報のルーティングプロトコル。1（その他），2（ローカル，静的なルーティング），5（EGP），6（GGP），8（RIP） // rtm_protocol
+				"ipRouteMask": 24, // rtm_dst_len
+				"ipRouteInfo": "10.0.2.15", // PREFSRC
+				"linux": {
+					"rtm_scope": 253,
+					"rtm_table": 0
+				}
+			},{
+
+			}]
+		}
+	}
+}
